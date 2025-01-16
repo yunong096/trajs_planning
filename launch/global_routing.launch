@@ -1,0 +1,17 @@
+<?xml version="1.0"?>
+<launch>
+    
+    <node pkg="testPkg" type="dynamic_routing" name="dynamic_routing" output="screen"/>
+
+    <!-- 全局规划 -->
+    <node pkg="testPkg" type="global_routing" name="global_routing" output="screen" />
+
+    <!--  加载车模型 -->
+    <include file="$(find vehicle_description)/launch/estima_white.launch" />
+    <!--  -->
+    <node pkg="testPkg" type="car_simulation" name="car_simulation" output="screen" />
+
+    <!-- rviz -->
+    <node pkg="rviz" type="rviz" name="rviz" args="-d $(find testPkg)/config/planning_demo.rviz"/>
+
+</launch>
