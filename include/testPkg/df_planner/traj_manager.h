@@ -141,7 +141,7 @@ class TrajPlanner {
 
     void plotFinalPath(vector<CartesianState>& path) {
         for(auto& state : path) {
-            cout << "df_state: " << state.x << ", " << state.y << ", " << state.speed << ", " << state.theta << ", " << state.acc << ", " << state.kappa << endl;
+            // cout << "df_state: " << state.x << ", " << state.y << ", " << state.speed << ", " << state.theta << ", " << state.acc << ", " << state.kappa << endl;
         }
     }
 };

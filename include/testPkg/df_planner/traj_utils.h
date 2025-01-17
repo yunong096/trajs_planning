@@ -6,7 +6,8 @@
 #include <utility>
 
 #include "df_planner/constants.h"
-#include "dp_planner.hpp"
+// #include "dp_planner.hpp"
+#include "nmpc2.hpp"
 
 namespace traj_utils {
 class VehicleParam {

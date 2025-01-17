@@ -210,6 +210,7 @@ void Dynamic_routing::thread_routing(void)
         // npmc_opt.solve(init_car_state, ref_path, best_path, obs);
         // best_path = npmc_opt.getFinalPath();
 
+        ROS_WARN("current frame_count: %d", frame_count);
         TrajPlanner df_opt;
         vector<CartesianState> new_path;
         if(df_opt.Run(init_car_state, obs, refline, frame_count, best_path, ref_path, last_path, new_path)) {
@@ -217,8 +218,8 @@ void Dynamic_routing::thread_routing(void)
           best_path = new_path;
         }
 
-        // if(frame_count > 2)
-          // is_reach_goal = true; //单帧测试用
+        if(frame_count > 49)
+          is_reach_goal = true; //单帧测试用
         ROS_WARN("finish dynamic planner");
         // 获取结束时间点
         auto end_time = std::chrono::high_resolution_clock::now();

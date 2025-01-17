@@ -35,12 +35,12 @@ bool TrajOptimizer::OptimizeTrajectory(const traj_utils::FlatTrajData &traj,
   bool flag_success = false;              // 返回值
   cost_vec.resize(piece_, 7);             // todo，变量赋值
   lbfgs::lbfgs_parameter_t lbfgs_params;  // 需要设置lbfgs参数，用config文件
-  lbfgs_params.mem_size = 256;
+  lbfgs_params.mem_size = 384;
   lbfgs_params.past = 3;
   lbfgs_params.g_epsilon = 1.0e-4;
   lbfgs_params.delta = 1e-3;  // 改了下
   lbfgs_params.min_step = 1.0e-32;
-  lbfgs_params.max_iterations = 50;
+  lbfgs_params.max_iterations =70;
   // wei_time_ = df_param.time_scale();
   // wei_feas_ = df_param.feas_scale();
   // wei_obs_ = df_param.obs_scale();
@@ -325,6 +325,7 @@ void TrajOptimizer::addPVAGradCost2CT(Eigen::MatrixXd &costs) {
       // 加入参考线中心代价
       // ROS_WARN("DF planner Start Calc Refline Cost");
       Eigen::Vector2d dist_to_ref = UpdateRefIndex(sigma, pointid);
+      // Eigen::Vector2d dist_to_ref = UpdateRefIndex(sigma);
       const double violaRef = dist_to_ref(0, 0) * dist_to_ref(0, 0) +
                               dist_to_ref(1, 0) * dist_to_ref(1, 0);
       if (violaRef > 0.0) {
@@ -493,6 +494,7 @@ vector<CartesianState> TrajOptimizer::GetResult(double gap) {
   for (double t = 0.0; t < total_t; t += gap, ++count) {
     CartesianState state;
     const auto pieceIdx = final_traj.locatePieceIdx(t);
+    // cout << "relative_t: " << pieceIdx.first << ", piece_idx" << pieceIdx.second << endl;
     const auto &piece = final_traj[pieceIdx.first];
     const double relative_t = pieceIdx.second;
     piece.getState(relative_t, state);
@@ -502,6 +504,16 @@ vector<CartesianState> TrajOptimizer::GetResult(double gap) {
       // cout << "df_state: " << state.x << ", " << state.y << ", " << state.speed << ", " << state.theta << ", " << state.acc << ", " << state.kappa << endl;
   }
   // cout << "final_path_size: " <<  final_path.size() << endl;
+  const auto &piece_positions = final_traj.getPositions();
+  for (int j = 0; j < piece_positions.cols(); j++) {
+    if (j == 0) {
+      cout << "起点：" << piece_positions(0, j) << ", " << piece_positions(1, j) << endl;
+    } else if (j == piece_positions.cols() - 1) {
+      cout << "终点：" << piece_positions(0, j) << ", " << piece_positions(1, j) << endl;
+    } else {
+      cout << "中间点：" << piece_positions(0, j) << ", " << piece_positions(1, j) << endl;
+    }
+  }
   return final_path;
 }
 

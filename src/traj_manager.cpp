@@ -32,7 +32,7 @@ bool TrajPlanner::Run(
   traj_utils::FlatTrajData trajs;
   
   vector<CartesianState> ref_states = source_path;
-  int max_inter = 10;
+  int max_inter = 1;
   double duration = 6.0;
   // ROS_WARN("DF planner set_init_param finished");
   
@@ -62,7 +62,7 @@ bool TrajPlanner::Run(
             //获取障碍物位置
             //测试用，只有一个动态障碍
             if(init_state.x > 60 && j == 9) continue;
-            if(init_state.y < 65 && j == 10) continue;
+            if( j == 10) continue;
             auto cur_obs = obs.getObs()[j];
             Eigen::MatrixXd poly(2, cur_obs.vertex_x.size());
             for (int k = 0; k < cur_obs.vertex_x.size(); ++k) {
@@ -88,6 +88,11 @@ bool TrajPlanner::Run(
     }
     auto start_time = std::chrono::high_resolution_clock::now();
     if (!traj_opt_.OptimizeTrajectory(trajs, refline, ori_path, last_path, rb_hPolys, fb_hPolys)) {
+      auto end_time = std::chrono::high_resolution_clock::now();
+      // 计算时间间隔 
+      std::chrono::duration<double> elapsed_seconds = end_time - start_time;
+      // 输出时间间隔
+      ROS_WARN( "a DF problem solve time: %f s" ,  elapsed_seconds.count() );
       ROS_WARN("DF planner opt failed!");
       return false;
     }
@@ -95,7 +100,7 @@ bool TrajPlanner::Run(
     // 计算时间间隔 
     std::chrono::duration<double> elapsed_seconds = end_time - start_time;
     // 输出时间间隔
-    std::cout << "一次DF求解时间: " << elapsed_seconds.count() << " 秒" << std::endl;
+    ROS_WARN( "a DF problem solve time: %f s" ,  elapsed_seconds.count() );
 
     auto opt_path = traj_opt_.GetResult();
     double diff = 0;
@@ -134,8 +139,15 @@ bool TrajPlanner::CalKeyPoint(const vector<CartesianState>& source_path,
   auto& inner_p = trajs->inner_pts;
   inner_p.resize(traj_opt_.piece_ - 1);
   for (int i = 1; i < traj_opt_.piece_; i++) {
+    cout << "inner_pt: " << source_path[i * traj_opt_.corridor_per_piece].x << ", " << source_path[i * traj_opt_.corridor_per_piece].y << endl;
     inner_p[i - 1] << source_path[i * traj_opt_.corridor_per_piece].x, source_path[i * traj_opt_.corridor_per_piece].y;
   }
+  // double delta_x = (source_path[source_path.size()].x - source_path[0].x) /  traj_opt_.piece_ ;
+  // double delta_y = (source_path[source_path.size()].y - source_path[0].y) /  traj_opt_.piece_;
+  // for (int i = 1; i < traj_opt_.piece_; i++) {
+  //   cout << "inner_pt: " << source_path[i * traj_opt_.corridor_per_piece].x << ", " << source_path[i * traj_opt_.corridor_per_piece].y << endl;
+  //   inner_p[i - 1] << source_path[0].x + i * delta_x, source_path[0].y + i * delta_y;
+  // }
 
   //inner_collision点，是用来算凸走廊的，换成CFS不是很需要、
   // const int corridor_size_total =

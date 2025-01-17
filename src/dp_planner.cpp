@@ -9,6 +9,7 @@ void DpPlanner::Initialize() {
     t_hri = 6;
     s_num = 21;
     s_hri = std::min(v_max * t_hri, refline_.all_s.back() - init_sl_state_.s);
+    // s_num = s_hri  < refline_.all_s.back() - init_sl_state_.s ? 21 : 11;
 
     // s_hri = std::min(v_max * t_hri, 60 - init_sl_state_.s); //测试用
     l_num = 11;
@@ -83,14 +84,14 @@ void DpPlanner::Initialize() {
 
 void DpPlanner::DynamicProgramming() {
     // Main loop of dynamic programming
+    v_ref = 10 / 3.6;
     for (int t_idx = 1; t_idx < t_num; ++t_idx) {
         double t = t_range[t_idx];
         vector<Vector3d> obs_vehicles; //x,y,yaw
-        
         //测试用，模拟障碍物位置，实际接入预测结果（p>0.2以上置信度，且差距小于0.05)
         // ROS_WARN("Start to get obs_vehicles");
         double stop_s = 1e6;
-        v_ref = 10 / 3.6;
+        
         for(auto j : obj_.getMoveInds()) { 
             auto cur_obs = obj_.getObs()[j];
             MatrixXd poly(2, cur_obs.vertex_x.size());
@@ -111,12 +112,13 @@ void DpPlanner::DynamicProgramming() {
                 if(obs_frenet.s - init_sl_state_.s - 2.35 - 3.7 - 1 <= s_range[s_range.size() -1] && std::abs(obs_frenet.l) < 3) {
                     stop_s = obs_frenet.s - init_sl_state_.s - 1 - 2.35 - 3.7;
                     // cout << "obs_ds: " << obs_frenet.ds << endl;
-                    if(obs_frenet.s - init_sl_state_.s - 2.35 - 3.7 <= 4) {
-                        v_ref = obs_frenet.ds;
+                    if(obs_frenet.s - init_sl_state_.s - 2.35 - 3.7 <= 4 || v_ref < 10/3.6) {
+                        v_ref = min(10/3.6, obs_frenet.ds);
                     }
                 }
                 else {
                     obs_vehicles.emplace_back(Vector3d{(poly(0, 0) +  poly(0, 1)) / 2, (poly(1,1) + poly(1,2)) / 2, -M_PI});
+                    v_ref = 10 / 3.6;
                 }
             }
             // ROS_WARN("obs_vehicles: %f, %f, %f,  time: %f", obs_vehicles[obs_vehicles.size() - 1](0), obs_vehicles[obs_vehicles.size() - 1](1), obs_vehicles[obs_vehicles.size() - 1](2), 0.5 *  frame_count + t);
@@ -206,7 +208,7 @@ std::vector<Vector3d> DpPlanner::Backtrack() {
         double s_idx = best_idx(0), l_idx = best_idx(1),  t_idx = best_idx(2);
         //将当前点加入轨迹
         trajectory.emplace_back(Vector3d{s_range[(int)s_idx], l_range[(int)l_idx], t_range[(int)t_idx]});
-        cout << "cost: " << cost_matrix_[(int)s_idx][(int)l_idx][(int)t_idx] << endl;
+        // cout << "cost: " << cost_matrix_[(int)s_idx][(int)l_idx][(int)t_idx] << endl;
         // cout << "s: " << s_range[(int)s_idx] << " l: " << l_range[(int)l_idx] << " t: " << t_range[(int)t_idx] << endl;
         //获取回溯点
         best_idx = backtrace_[s_idx][l_idx][t_idx];
