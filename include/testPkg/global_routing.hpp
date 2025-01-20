@@ -20,6 +20,7 @@
 #include <waypoint_msgs/WaypointArray.h>
 #include "Obstacles.hpp"
 #include "DynamicPathStruct.hpp"
+#include "MovingObs.hpp"
 
 using namespace std;
 

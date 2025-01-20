@@ -194,6 +194,7 @@ add_executable(dynamic_routing  src/dynamic_routing_node.cpp
 add_executable(global_routing src/global_routing_node.cpp
                                   src/global_routing.cpp
                                   src/lqr_controller.cpp
+                                  src/MovingObs.cpp
                                   )
 
 add_executable(car_simulation 

@@ -204,6 +204,10 @@ GlobalRouting::GlobalRouting()
       obstacle_MarkerArray.markers.emplace_back(marker);
       //obs_pub.publish(obstacle_MarkerArray);
     }
+    MovingObs::num = 2;
+		MovingObs::obs_traj.resize(1);
+    MovingObs::obs_traj[0] = MovingObs::loadTrajectoryData("/home/lynnn/test_ws/opposite.csv");
+        // obs_traj[1] = loadTrajectoryData("following.csv");
     
 
     // 打印控制器
@@ -254,21 +258,57 @@ void GlobalRouting::thread_routing()
   while (n.ok())
   {
     //发布障碍可视化
-      if(obstacle_MarkerArray.markers.size() > (obs.getNum() -  obs.getMoveInds().size() + 1))
-        obstacle_MarkerArray.markers.resize(obs.getNum() -  obs.getMoveInds().size() + 1);
-      for(auto& j : obs.getMoveInds()) { 
-        // cout << "moving ind: " << j << endl;
-        visualization_msgs::Marker marker;
-        auto cur_obs = obs.getObs()[j];
-        MatrixXd poly(2, cur_obs.vertex_x.size());
-        for (int i = 0; i < cur_obs.vertex_x.size(); ++i) {
-          poly(0, i) = cur_obs.vertex_x[i];
-          poly(1, i) = cur_obs.vertex_y[i];
+      // if(obstacle_MarkerArray.markers.size() > (obs.getNum() -  obs.getMoveInds().size() + 1))
+      //   obstacle_MarkerArray.markers.resize(obs.getNum() -  obs.getMoveInds().size() + 1);
+      // for(auto& j : obs.getMoveInds()) { 
+      //   // cout << "moving ind: " << j << endl;
+      //   visualization_msgs::Marker marker;
+      //   auto cur_obs = obs.getObs()[j];
+      //   MatrixXd poly(2, cur_obs.vertex_x.size());
+      //   for (int i = 0; i < cur_obs.vertex_x.size(); ++i) {
+      //     poly(0, i) = cur_obs.vertex_x[i];
+      //     poly(1, i) = cur_obs.vertex_y[i];
+      //   }
+      //   poly += cur_obs.speed * MatrixXd::Ones(1, 4) * 0.1 *  frame_count; 
+      //   Turn_obstacles_into_squares(marker, poly, j + 1);
+      //   obstacle_MarkerArray.markers.emplace_back(marker);
+      // }
+      if(obstacle_MarkerArray.markers.size() > (obs.getNum() -  MovingObs::num + 1))
+          obstacle_MarkerArray.markers.resize(obs.getNum() -  MovingObs::num + 1);
+        for(auto& traj : MovingObs::obs_traj) { 
+          // cout << "moving ind: " << j << endl;
+          visualization_msgs::Marker marker;
+          auto& cur_obs = traj[frame_count];
+          MatrixXd poly(2, 4);
+          double half_length =  2.0 / 2.0;
+          double half_width = 4.7 /2.0;
+
+          // 计算旋转矩阵
+          Matrix2d rotation;
+          rotation << std::cos(cur_obs.cur_state.theta), -std::sin(cur_obs.cur_state.theta),
+                      std::sin(cur_obs.cur_state.theta),  std::cos(cur_obs.cur_state.theta);
+
+          // 计算四个顶点相对于中心的坐标
+          Vector2d right_bottom(half_length, -half_width);
+          Vector2d right_top(half_length, half_width);
+          Vector2d left_top(-half_length, half_width);
+          Vector2d left_bottom(-half_length, -half_width);
+
+          // 旋转并平移顶点
+          right_bottom = rotation * right_bottom + Vector2d(cur_obs.cur_state.x, cur_obs.cur_state.y);
+          right_top = rotation * right_top + Vector2d(cur_obs.cur_state.x, cur_obs.cur_state.y);
+          left_top = rotation * left_top + Vector2d(cur_obs.cur_state.x, cur_obs.cur_state.y);
+          left_bottom = rotation * left_bottom + Vector2d(cur_obs.cur_state.x, cur_obs.cur_state.y);
+
+          // 将顶点赋值给 poly 矩阵，从右下顺时针开始
+          poly.col(0) = right_bottom;
+          poly.col(1) = right_top;
+          poly.col(2) = left_top;
+          poly.col(3) = left_bottom;
+          
+          Turn_obstacles_into_squares(marker, poly, 10);
+          obstacle_MarkerArray.markers.emplace_back(marker);
         }
-        poly += cur_obs.speed * MatrixXd::Ones(1, 4) * 0.1 *  frame_count; 
-        Turn_obstacles_into_squares(marker, poly, j + 1);
-        obstacle_MarkerArray.markers.emplace_back(marker);
-      }
       
     // Start_dynamic 局部规划轨迹开始生成
     if (is_start_pose_set == true && is_goal_pose_set == true && Start_dynamic == "1")
