@@ -57,31 +57,39 @@ bool Mpc::solve(CartesianState& current_state,
                                                         std::vector<CartesianState>& ref_states_,
                                                         Obstacles& obs) {
                                                             //设置ref_states_para
-    int max_iter = 2;
+    int max_iter = 3;
     std::vector<CartesianState> ref_states = ref_states_;
-    MX  initX= MX::zeros(4, N_ + 1);
-    MX  initU= MX::zeros(2, N_);
-    MX  initS= MX::zeros(2, N_ + 1);
-    for(int i = 0; i < N_ + 1; ++i) {
-        initX(0, i) = ref_states[i].x;
-        initX(1, i) = ref_states[i].y;
-        initX(2, i) = ref_states[i].speed;
-        initX(3, i) = ref_states[i].theta;
-        if(i < N_) {
-            initU(0, i) = ref_states[i].acc;
-            initU(1, i) = std::atan2(2.7 * ref_states[i].kappa, 1);
-        }
-    }
+    
     while(max_iter--) {
         Opti opti = Opti();
 
         Slice all;
+
+        DM  initX= DM::zeros(4, N_ + 1);
+        DM  initU= DM::zeros(2, N_);
+        DM  initS= DM::zeros(2, N_ + 1);
+        for(int i = 0; i < N_ + 1; ++i) {
+            initX(0, i) = ref_states[i].x;
+            initX(1, i) = ref_states[i].y;
+            initX(2, i) = ref_states[i].speed;
+            initX(3, i) = ref_states[i].theta;
+            if(i < N_) {
+                initU(0, i) = ref_states[i].acc;
+                initU(1, i) = std::atan2(2.7 * ref_states[i].kappa, 1);
+            }
+        }
 
         MX cost = 0;
         X = opti.variable(4, N_ + 1);// 定义一个3行N_+1列的矩阵变量X 注意：是变量。
         S = opti.variable(2, N_ + 1);
         //第一个时间步（索引为0）表示当前时刻的状态 后面N_个时间步表示未来N_个时刻的状态和U对应
         U = opti.variable(2, N_);
+
+        // 设置初始值
+        opti.set_initial(X, initX);
+        opti.set_initial(U, initU);
+        opti.set_initial(S, initS);
+
         MX x = X(0, all);
         MX y = X(1, all);
         MX v = X(2, all);
@@ -94,14 +102,14 @@ bool Mpc::solve(CartesianState& current_state,
         /*考虑在问题构建中加入带有最小化运动时间的变步长系数，因为DF的求解中考虑了这一点*/
 
         
-        MX X_cur = MX::zeros(4);
+        DM X_cur = DM::zeros(4);
         X_cur(0) = current_state.x;
         X_cur(1) = current_state.y;
         X_cur(2) = current_state.speed;
         X_cur(3) = current_state.theta;
         // cout << "set current state success" << endl;
 
-        MX X_ref =MX::zeros(4, N_ + 1);   // 定义一个4行N_+1列的参数矩阵X_ref 注意：是已知的常量
+        DM X_ref =DM::zeros(4, N_ + 1);   // 定义一个4行N_+1列的参数矩阵X_ref 注意：是已知的常量
         X_ref(0, 0) = current_state.x;
         X_ref(1, 0) = current_state.y;
         X_ref(2, 0) = current_state.speed;
@@ -238,9 +246,18 @@ bool Mpc::solve(CartesianState& current_state,
         solver_opts["ipopt.acceptable_obj_change_tol"] = 1e-6;
 
         opti.solver("ipopt", solver_opts);
+
+        auto start_time = std::chrono::high_resolution_clock::now();
+
         solution_ = std::make_unique<casadi::OptiSol>(opti.solve());
 
-        opt_path = opt_path = getSoluPath();
+        auto end_time = std::chrono::high_resolution_clock::now();
+        // 计算时间间隔 
+        std::chrono::duration<double> elapsed_seconds = end_time - start_time;
+        // 输出时间间隔
+        ROS_WARN( "a NMPC problem solve time: %f s" ,  elapsed_seconds.count() );
+
+        opt_path = getSoluPath();
         double diff = 0;
         for (int i = 0; i < N_ + 1; ++i) {
             diff += pow(opt_path[i].x - ref_states[i].x, 2) + pow(opt_path[i].y - ref_states[i].y, 2);

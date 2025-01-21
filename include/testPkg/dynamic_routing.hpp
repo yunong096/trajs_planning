@@ -21,8 +21,8 @@
 // #include "Obstacles.hpp"
 // #include "CoarsePathGenerator.hpp"
 // #include "dp_planner.hpp"
-// #include "nmpc2.hpp"
-#include "df_planner/traj_manager.h"
+#include "nmpc2.hpp"
+// #include "df_planner/traj_manager.h"
 
 
 using std::string;

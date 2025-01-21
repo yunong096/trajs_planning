@@ -62,7 +62,8 @@ bool TrajPlanner::Run(
             //获取障碍物位置
             //测试用，只有一个动态障碍
             if(init_state.x > 60 && j == 9) continue;
-            if( j == 10) continue;
+            if(init_state.y < 65 && j == 10) continue;
+            // if( j == 10) continue;
             auto cur_obs = obs.getObs()[j];
             Eigen::MatrixXd poly(2, cur_obs.vertex_x.size());
             for (int k = 0; k < cur_obs.vertex_x.size(); ++k) {

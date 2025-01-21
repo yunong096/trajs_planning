@@ -177,12 +177,22 @@ void Dynamic_routing::thread_routing(void)
     }
 
     if(is_set_refline) {
-      if(hypot(init_car_state.x - goal_pose_.x, init_car_state.y - goal_pose_.y) < 0.1) {
+      // if(hypot(init_car_state.x - goal_pose_.x, init_car_state.y - goal_pose_.y) < 0.1) {
+      if(hypot(init_car_state.x - refline[refline.size() - 1].x, init_car_state.y - refline[refline.size() - 1].y) < 0.1) {
         //结束，不能放在if外，会导致一开始就到达了终点
-        ROS_WARN("goal arrived!");
-        string aa = "0";
-        start_dynamic.data = aa.c_str();
-        Start_Dynamic.publish(start_dynamic); 
+        ROS_WARN("heading goal arrived!");
+        
+        //泊车轨迹规划
+        //读入参考轨迹
+
+        //轨迹优化
+
+        //轨迹pub
+
+        
+        // string aa = "0";
+        // start_dynamic.data = aa.c_str();
+        // Start_Dynamic.publish(start_dynamic); 
         is_reach_goal = true;
       }
       if ( !is_reach_goal) {
@@ -206,20 +216,20 @@ void Dynamic_routing::thread_routing(void)
         ref_path = dp_planner.getRefPath();
         ROS_WARN("finish dp planner");
 
-        // Mpc npmc_opt(frame_count);
-        // npmc_opt.solve(init_car_state, ref_path, best_path, obs);
-        // best_path = npmc_opt.getFinalPath();
+        Mpc npmc_opt(frame_count);
+        npmc_opt.solve(init_car_state, ref_path, best_path, obs);
+        best_path = npmc_opt.getFinalPath();
 
-        ROS_WARN("current frame_count: %d", frame_count);
-        TrajPlanner df_opt;
-        vector<CartesianState> new_path;
-        if(df_opt.Run(init_car_state, obs, refline, frame_count, best_path, ref_path, last_path, new_path)) {
-          best_path.resize(new_path.size());
-          best_path = new_path;
-        }
+        // ROS_WARN("current frame_count: %d", frame_count);
+        // TrajPlanner df_opt;
+        // vector<CartesianState> new_path;
+        // if(df_opt.Run(init_car_state, obs, refline, frame_count, best_path, ref_path, last_path, new_path)) {
+        //   best_path.resize(new_path.size());
+        //   best_path = new_path;
+        // }
 
-        if(frame_count > 49)
-          is_reach_goal = true; //单帧测试用
+        // if(frame_count > 49)
+        //   is_reach_goal = true; //单帧测试用
         ROS_WARN("finish dynamic planner");
         // 获取结束时间点
         auto end_time = std::chrono::high_resolution_clock::now();

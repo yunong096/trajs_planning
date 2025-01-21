@@ -45,7 +45,7 @@ class TrajOptimizer {
   double wei_feas_ = 250.0;
   double wei_obs_ = 400.0;
   double wei_lb_ = 4.0;
-  double wei_ref_ = 400.0;
+  double wei_ref_ = 500.0;
   double wei_consist_ = 400.0;
   double wei_cur_ = 300.0;
   double wei_jerk_ = 10.0;

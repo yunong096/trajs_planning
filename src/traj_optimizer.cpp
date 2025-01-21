@@ -40,7 +40,7 @@ bool TrajOptimizer::OptimizeTrajectory(const traj_utils::FlatTrajData &traj,
   lbfgs_params.g_epsilon = 1.0e-4;
   lbfgs_params.delta = 1e-3;  // 改了下
   lbfgs_params.min_step = 1.0e-32;
-  lbfgs_params.max_iterations =70;
+  lbfgs_params.max_iterations =100;
   // wei_time_ = df_param.time_scale();
   // wei_feas_ = df_param.feas_scale();
   // wei_obs_ = df_param.obs_scale();
