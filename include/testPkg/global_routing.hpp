@@ -46,7 +46,7 @@ public:
 
   void Turn_obstacles_into_squares(visualization_msgs::Marker &marker,  const MatrixXd& poly, int id)
   {
-    double Length =fabs(poly(0, 0) - poly(0, 1));
+    double Length = fabs(poly(0, 0) - poly(0, 1));
     double width = fabs(poly(1, 1) - poly(1, 2));
     marker.pose.orientation = tf::createQuaternionMsgFromRollPitchYaw(0, 0, 0);;
     marker.header.frame_id = "map";
@@ -73,11 +73,41 @@ public:
       marker.color.b = 1.0f;
       marker.pose.position.z = 0.0;
     }
-    else if(id > 9) {
+    // else if(id > 9) {
+    //   cout << "plot moving obs: " << marker.pose.position.x << ", " << marker.pose.position.y << endl;
+    //   marker.scale.x = 2.7;
+    //   marker.scale.y = 2.0;
+    //   marker.color.r = 0.0f;
+    //   marker.color.g = 0.0f;
+    //   marker.color.b = 1.0f;
+    //   marker.pose.position.z = 0.2;
+    // }
+    // marker.lifetime = ros::Duration();
+  }
+
+  void Turn_moving_obstacles_into_squares(visualization_msgs::Marker &marker,  const Trajectory& cur_obs, int id)
+  {
+    double Length = 4.7;
+    double width = 2.0;
+    marker.pose.orientation = tf::createQuaternionMsgFromRollPitchYaw(0, 0, cur_obs.cur_state.theta);;
+    marker.header.frame_id = "map";
+    marker.header.stamp = ros::Time::now();
+    marker.ns = "basic_shapes";
+    marker.id = id; // 注意了
+    marker.type = visualization_msgs::Marker::CUBE;
+    marker.action = visualization_msgs::Marker::ADD;
+    marker.pose.position.x = cur_obs.cur_state.x;
+    marker.pose.position.y = cur_obs.cur_state.y;
+    marker.pose.position.z = 0.2;
+    // cout << Length << " "<< width<< " " << marker.pose.position.x<< " " << marker.pose.position.y<< " " << endl;
+    // cout << fabs(poly(0, 0) - poly(0, 1)) << endl;
+      cout << "plot moving obs: " << marker.pose.position.x << ", " << marker.pose.position.y << endl;
+      marker.scale.x = Length;
+      marker.scale.y = width;
       marker.color.r = 0.0f;
       marker.color.g = 0.0f;
       marker.color.b = 1.0f;
-    }
+      marker.color.a = 1.0;
     // marker.lifetime = ros::Duration();
   }
 

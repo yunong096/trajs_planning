@@ -178,7 +178,7 @@ void Dynamic_routing::thread_routing(void)
 
     if(is_set_refline) {
       // if(hypot(init_car_state.x - goal_pose_.x, init_car_state.y - goal_pose_.y) < 0.1) {
-      if(hypot(init_car_state.x - refline[refline.size() - 1].x, init_car_state.y - refline[refline.size() - 1].y) < 0.1) {
+      if(hypot(init_car_state.x - refline.x.back(), init_car_state.y - refline.y.back()) < 0.1) {
         //结束，不能放在if外，会导致一开始就到达了终点
         ROS_WARN("heading goal arrived!");
         

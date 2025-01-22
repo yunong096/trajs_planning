@@ -40,7 +40,7 @@
 import csv
 
 # 读取 waypoints_data.txt 文件
-with open('/home/lynnn/test_ws/waypoints_data.txt', 'r') as file:
+with open('/home/lynnn/test_ws/parking_points.txt', 'r') as file:
     lines = file.readlines()
 
 # 解析数据
@@ -51,7 +51,7 @@ for line in lines:
         waypoints.append((x, y))
 
 # 生成 CSV 文件
-output_file = 'predicted_trajectory.csv'
+output_file = 'parking.csv'
 time_step = 0.1
 prediction_length = 6.0
 num_points = int(prediction_length / time_step) + 1
@@ -73,7 +73,7 @@ for t in range(len(waypoints)):
         else:
             x, y = waypoints[len(waypoints) - 1]
         row.append(x)
-        row.append(y)
+        row.append(-y)
     data.append(row)
 
 # 写入CSV文件

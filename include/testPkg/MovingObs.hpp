@@ -97,6 +97,7 @@ public:
             std::getline(ss, cell, ',');
             traj.time = std::stod(cell);
             
+            double last_theta = 0;
             // 读取 (x, y) 点对
             while (std::getline(ss, cell, ',')) {
                 double x = std::stod(cell);
@@ -106,7 +107,14 @@ public:
             }
              traj.cur_state.x =  traj.points[0].first;
              traj.cur_state.y =  traj.points[0].second;
-             traj.cur_state.theta =  atan2(traj.points[1].first - traj.points[0].first, traj.points[1].second - traj.points[0].second);
+             if(traj.points[1].first != traj.points[0].first || traj.points[1].second != traj.points[0].second) {
+                traj.cur_state.theta =  atan2(traj.points[1].second - traj.points[0].second,  traj.points[1].first - traj.points[0].first);
+                last_theta = traj.cur_state.theta;
+             }
+             else
+                traj.cur_state.theta =  last_theta;
+             traj.cur_state.v =  hypot(traj.points[1].first - traj.points[0].first, traj.points[1].second - traj.points[0].second) / 0.1;
+             cout << "cur_state: " <<   traj.cur_state.x << ", " <<  traj.cur_state.y << ", " <<traj.cur_state.theta <<  endl;
             data.push_back(traj);
         }
         file.close();
