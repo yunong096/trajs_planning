@@ -30,6 +30,19 @@ find_package(catkin REQUIRED COMPONENTS
   # cmake_modules\
 )
 
+# set(AltroCpp_DIR ~/.local)  # or wherever the user installed the library via CMAKE_INSTALL_PREFIX
+# find_library(AltroCpp 0.3  REQUIRED EXACT)
+find_package(Eigen3 3.3 REQUIRED NO_MODULE)
+find_package(Python3 COMPONENTS Development NumPy)
+
+set(fmt_ROOT "/home/lynnn/dependpkgs/fmt-8.1.1")
+set(fmt_REQUIRED_VERSION 6.1.2)
+set(fmt_REQUIRED_DEBIAN_VERSION ${fmt_REQUIRED_VERSION})
+find_package(fmt ${fmt_REQUIRED_VERSION} REQUIRED)
+
+set(AltroCpp_ROOT "/home/lynnn/dependpkgs/ALTRO-iLQR-main")
+find_package(AltroCpp 0.3.4 REQUIRED)
+
 # find_package(Eigen REQUIRED)
 
 ## System dependencies are found with CMake's conventions
@@ -144,6 +157,7 @@ include_directories(
   /usr/local/include/osqp
   /usr/local/include/Eigen
   /usr/local/include/osqp-eigen
+  /home/lynnn/.local/include
   #/usr/local/include/absl
 #  /home/lynnn/dependpkgs/osqp-eigen-master/include
 )
@@ -241,7 +255,20 @@ target_link_libraries(cfstest
   absl::strings
 
   libipopt.so
-  # altro::altro
+
+  fmt::fmt
+  altro::altro
+  # libgtest.a
+  # libfmt.a
+  
+  # libcommon.a
+  # libthreadpool.a
+  # libilqr.a
+  # libproblem.a
+  # libutils.a
+  # libconstraints.a
+  # libaugmented_lagrangian.a
+  
 )
 
 target_link_libraries(dynamic_routing

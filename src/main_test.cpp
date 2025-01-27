@@ -10,6 +10,7 @@
 #include <visualization_msgs/Marker.h>
 #include <fstream>
 #include <boost/thread.hpp>
+#include <altro/augmented_lagrangian/al_solver.hpp>
 // #include "object_msgs/DynamicObjectArray.h"
 // #include "object_msgs/Semantic.h"
 // #include "object_msgs/Shape.h"
@@ -276,6 +277,12 @@ int main(int argc, char * argv[])
     //       }
     //     pub.publish(msg);//用这个发布者对象发布消息，看定义，也和我们之前的创建发布者那边有关，他只能发布string的
     */
+
+      const int NumStates = 4;
+      const int NumControls = 2;
+      int num_segments = 100;
+      altro::augmented_lagrangian::AugmentedLagrangianiLQR<NumStates, NumControls> solver(num_segments);
+
         //添加日志
         ROS_INFO("发布的数据是:%s", msg.data.c_str());//%s表示字符串
         rate.sleep();
