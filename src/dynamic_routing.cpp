@@ -220,6 +220,10 @@ void Dynamic_routing::thread_routing(void)
         npmc_opt.solve(init_car_state, ref_path, best_path, obs);
         best_path = npmc_opt.getFinalPath();
 
+        // altro::problems::VehicleProblem altro_problem(frame_count);
+        // altro_problem.IterOpt(init_car_state, ref_path, best_path, obs);
+        // best_path = altro_problem.getFinalPath();
+
         // ROS_WARN("current frame_count: %d", frame_count);
         // TrajPlanner df_opt;
         // vector<CartesianState> new_path;
@@ -228,8 +232,9 @@ void Dynamic_routing::thread_routing(void)
         //   best_path = new_path;
         // }
 
-        // if(frame_count > 49)
-        //   is_reach_goal = true; //单帧测试用
+        if(frame_count > 1)
+          is_reach_goal = true; //单帧测试用
+
         ROS_WARN("finish dynamic planner");
         // 获取结束时间点
         auto end_time = std::chrono::high_resolution_clock::now();
@@ -279,7 +284,7 @@ void Dynamic_routing::thread_routing(void)
             marker.header.stamp = ros::Time::now();
             marker.header.frame_id = "map";
             marker.ns = "path";
-            marker.lifetime = ros::Duration(0.6); // Marker将在5秒后自动消失
+            // marker.lifetime = ros::Duration(0.6); // Marker将在5秒后自动消失
             marker.id = i;
             marker.type = visualization_msgs::Marker::SPHERE;
             marker.action = visualization_msgs::Marker::ADD;

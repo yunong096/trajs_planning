@@ -8,7 +8,7 @@ Mpc::Mpc(int count) {
     acc_max_ = 1.5;
     v_max_ = 15 / 3.6;
     delta_max_ = 0.52;
-    vector<double> weights = {1,1,1,0,2,2,4,4}; //Q,R,S
+    vector<double> weights = {1,1,1,0,2,2,100,100}; //Q,R,S
     acc_min_ = - acc_max_;
     delta_min_ = - delta_max_;
     
@@ -57,7 +57,7 @@ bool Mpc::solve(CartesianState& current_state,
                                                         std::vector<CartesianState>& ref_states_,
                                                         Obstacles& obs) {
                                                             //设置ref_states_para
-    int max_iter = 3;
+    int max_iter = 10;
     std::vector<CartesianState> ref_states = ref_states_;
     
     while(max_iter--) {
@@ -162,7 +162,7 @@ bool Mpc::solve(CartesianState& current_state,
         // cout << "set lu constrains success" << endl;
 
         //set obstacle constraints
-        int margin = sqrt(2);
+        int margin = sqrt(2) + 0.5;
         std::vector<float> ref_states_para_front = FrontPos(ref_states);
         for (int i = 0; i < N_ + 1; ++i)
         {
@@ -239,7 +239,7 @@ bool Mpc::solve(CartesianState& current_state,
         //set solver
         casadi::Dict solver_opts; // 设置求解器选项
         solver_opts["expand"] = true; //MX change to SX for speed up
-        solver_opts["ipopt.max_iter"] = 300;
+        solver_opts["ipopt.max_iter"] = 1000;
         solver_opts["ipopt.print_level"] = 0;
         solver_opts["print_time"] = 0;
         solver_opts["ipopt.acceptable_tol"] = 1e-6;

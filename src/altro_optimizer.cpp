@@ -1,14 +1,15 @@
 // Copyright [2021] Optimus Ride Inc.
 
-#include "examples/problems/vehicle.hpp"
+#include "altro_optimizer.hpp"
 
 namespace altro {
 namespace problems {
 
-VehicleProblem::VehicleProblem() {
+VehicleProblem::VehicleProblem(int count) {
+  frame_count = count;
 }
 
-altro::problem::Problem VehicleProblem::MakeProblem(const bool add_constraints, , Eigen::Vector4d x_init) {
+altro::problem::Problem VehicleProblem::MakeProblem(const bool add_constraints, Eigen::Vector4d x_init) {
   altro::problem::Problem prob(N);
 
   // goal = std::make_shared<altro::examples::GoalConstraint>(xf);
@@ -32,20 +33,20 @@ altro::problem::Problem VehicleProblem::MakeProblem(const bool add_constraints, 
          0, 0, 0, 0, 
          0, 0, 0, weight_speed * h;
     x0 = x_init;
-    xf << 100, 0, 0, 0;
-    u0 << 0.0, 10.0;
+    // u0 << 0.0, 10.0;
     uref << 0.0, 0.0;
 
-    lb = {0, -3};
-    ub = {3, +3};
+    lb = {-a_bnd, -delta_bnd};
+    ub = {a_bnd, delta_bnd};
   }
-
   // Cost Function
   for (int k = 0; k < N; ++k) {
+    xf = Vector4d(ori_states_[k].x, ori_states_[k].y, ori_states_[k].theta, 10/3.6);
     qcost =
         std::make_shared<examples::QuadraticCost>(examples::QuadraticCost::LQRCost(Q, R, xf, uref)); //代价为距离目标位置和控制量大小
     prob.SetCostFunction(qcost, k);
   }
+  xf = Vector4d(ori_states_[N].x, ori_states_[N].y, ori_states_[N].theta, 10/3.6);
   qterm = std::make_shared<examples::QuadraticCost>(
       examples::QuadraticCost::LQRCost(Qf, R * 0, xf, uref, true));
   prob.SetCostFunction(qterm, N);
@@ -60,7 +61,7 @@ altro::problem::Problem VehicleProblem::MakeProblem(const bool add_constraints, 
     for (int k = 0; k < N; ++k) {
       prob.SetConstraint(std::make_shared<altro::examples::ControlBound>(lb, ub), k); //上下界约束
     }
-    prob.SetConstraint(std::make_shared<examples::GoalConstraint>(xf), N); //终点约束
+    // prob.SetConstraint(std::make_shared<examples::GoalConstraint>(xf), N); //终点约束
   }
 
   // Initial State

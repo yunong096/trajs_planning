@@ -1,6 +1,6 @@
 // Copyright [2021] Optimus Ride Inc.
 
-#include "examples/unicycle.hpp"
+#include "examples/vehicle.hpp"
 
 #include <cmath>
 
@@ -9,7 +9,7 @@
 namespace altro {
 namespace examples {
 
-void Unicycle::Evaluate(const VectorXdRef& x, const VectorXdRef& u, const float t,
+void Vehicle::Evaluate(const VectorXdRef& x, const VectorXdRef& u, const float t,
                                Eigen::Ref<VectorXd> xdot) {
   ALTRO_UNUSED(t);
   double theta = x(2);  // angle
@@ -22,7 +22,7 @@ void Unicycle::Evaluate(const VectorXdRef& x, const VectorXdRef& u, const float 
   xdot(3) = acc;
 }
 
-void Unicycle::Jacobian(const VectorXdRef& x, const VectorXdRef& u, const float t,
+void Vehicle::Jacobian(const VectorXdRef& x, const VectorXdRef& u, const float t,
                         Eigen::Ref<MatrixXd> jac) {
   ALTRO_UNUSED(t);
   double theta = x(2);  // angle
@@ -37,7 +37,7 @@ void Unicycle::Jacobian(const VectorXdRef& x, const VectorXdRef& u, const float 
   jac(3, 4) = 1;
 }
 
-void Unicycle::Hessian(const VectorXdRef& x, const VectorXdRef& u, const float t,
+void Vehicle::Hessian(const VectorXdRef& x, const VectorXdRef& u, const float t,
                        const VectorXdRef& b, Eigen::Ref<MatrixXd> hess) {
   ALTRO_UNUSED(t);
   double theta = x(2);  // angle

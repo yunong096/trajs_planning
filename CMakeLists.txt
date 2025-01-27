@@ -157,7 +157,6 @@ include_directories(
   /usr/local/include/osqp
   /usr/local/include/Eigen
   /usr/local/include/osqp-eigen
-  /home/lynnn/.local/include
   #/usr/local/include/absl
 #  /home/lynnn/dependpkgs/osqp-eigen-master/include
 )
@@ -197,6 +196,9 @@ add_executable(dynamic_routing  src/dynamic_routing_node.cpp
                                   src/nmpc2.cpp
                                   src/traj_optimizer.cpp
                                   src/traj_manager.cpp
+                                  src/altro_optimizer.cpp
+                                  include/testPkg/examples/vehicle.cpp
+                                  include/testPkg/examples/quadratic_cost.cpp
                                   include/testPkg/modules/planning/planning_base/reference_line/spiral_problem_interface.cc
                                   include/testPkg/modules/common/math/math_utils.cc
                                   include/testPkg/modules/common/math/integral.cc
@@ -279,7 +281,9 @@ target_link_libraries(dynamic_routing
   absl::strings
   libipopt.so
   /usr/local/lib/libcasadi.so.3.7
-  # altro::altro
+
+  fmt::fmt
+  altro::altro
 )
 
 target_link_libraries(global_routing
