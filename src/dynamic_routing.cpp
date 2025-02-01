@@ -216,13 +216,13 @@ void Dynamic_routing::thread_routing(void)
         ref_path = dp_planner.getRefPath();
         ROS_WARN("finish dp planner");
 
-        Mpc npmc_opt(frame_count);
-        npmc_opt.solve(init_car_state, ref_path, best_path, obs);
-        best_path = npmc_opt.getFinalPath();
+        // Mpc npmc_opt(frame_count);
+        // npmc_opt.solve(init_car_state, ref_path, best_path, obs);
+        // best_path = npmc_opt.getFinalPath();
 
-        // altro::problems::VehicleProblem altro_problem(frame_count);
-        // altro_problem.IterOpt(init_car_state, ref_path, best_path, obs);
-        // best_path = altro_problem.getFinalPath();
+        altro::problems::VehicleProblem altro_problem(frame_count);
+        altro_problem.IterOpt(init_car_state, ref_path, best_path, obs);
+        best_path = altro_problem.getFinalPath();
 
         // ROS_WARN("current frame_count: %d", frame_count);
         // TrajPlanner df_opt;
@@ -232,7 +232,7 @@ void Dynamic_routing::thread_routing(void)
         //   best_path = new_path;
         // }
 
-        if(frame_count > 1)
+        if(frame_count > 0)
           is_reach_goal = true; //单帧测试用
 
         ROS_WARN("finish dynamic planner");

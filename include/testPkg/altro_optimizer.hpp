@@ -59,6 +59,8 @@ class VehicleProblem {
 
   std::vector<double> lb;
   std::vector<double> ub;
+   std::vector<double> lb_state{0,0,-std::numeric_limits<double>::infinity(),0};
+  std::vector<double> ub_state{140,80,std::numeric_limits<double>::infinity(),15/3.6};
   // altro::examples::LineConstraint obstacles;
 
 
@@ -71,12 +73,13 @@ class VehicleProblem {
     ref_states_ = ref_states;
     ori_states_ = ori_states;
     Eigen::Vector4d x_init(current_state.x, current_state.y, current_state.theta, current_state.speed);
+    x0 = x_init;
     double dt_ = GetTimeStep();
     while(max_iter--) {
-      altro::problem::Problem prob = MakeProblem(true, x_init);
+      altro::problem::Problem prob = MakeProblem(true);
       //set obstacle constraints
-      int margin = sqrt(2);
-      std::vector<float> ref_states_para_front = FrontPos(ref_states);
+      double margin = sqrt(2);
+      std::vector<float> ref_states_para_front = FrontPos(ref_states_);
       for (int i = 1; i <= N; ++i)
       {
           altro::examples::LineConstraint obstacles;
@@ -95,11 +98,10 @@ class VehicleProblem {
               }
               poly += cur_obs.speed * MatrixXd::Ones(1, 4) * (0.5 *  frame_count + dt_ * i); 
               
-              double margin =sqrt(2) + 0.5; //安全距离
               //后轴约束
               Eigen::VectorXd alpha;
               double beta, d;
-              Eigen::Vector2d ref_pos(ref_states[i].x, ref_states[i].y);
+              Eigen::Vector2d ref_pos(ref_states_[i].x, ref_states_[i].y);
               d2poly(ref_pos, poly,alpha, beta, d);  // 计算到多边形的距离
               obstacles.AddObstacle(Vector3d(alpha(0), alpha(1), beta - margin));
               // cout << "alpha1:" << alpha(0) << "," << alpha(1) << "beta:" << beta << "d:" << d << endl;
@@ -111,17 +113,26 @@ class VehicleProblem {
               }
           std::shared_ptr<altro::constraints::Constraint<altro::constraints::Inequality>> obs =
               std::make_shared<altro::examples::LineConstraint>(obstacles);
-          prob.SetConstraint(obs, i); //对第k个pt设置障碍物约束
+          // prob.SetConstraint(obs, i); //对第k个pt设置障碍物约束
           std::shared_ptr<altro::constraints::Constraint<altro::constraints::Inequality>> front_obs =
               std::make_shared<altro::examples::LineFrontConstraint>(front_obstacles);
-          prob.SetConstraint(front_obs, i); //对第k个pt设置障碍物约束   
+          // prob.SetConstraint(front_obs, i); //对第k个pt设置障碍物约束   
       }
       altro::augmented_lagrangian::AugmentedLagrangianiLQR<NStates, NControls> solver_al(prob);
       solver_al.SetTrajectory(std::make_shared<altro::Trajectory<NStates, NControls>>(InitialTrajectory()));
       solver_al.GetiLQRSolver().Rollout();
       solver_al.SetPenalty(10.0);
       solver_al.GetOptions().verbose = altro::LogLevel::kDebug;
+
+      auto start_time = std::chrono::high_resolution_clock::now();
       solver_al.Solve();
+      // 获取结束时间点
+      auto end_time = std::chrono::high_resolution_clock::now();
+      // 计算时间间隔
+      std::chrono::duration<double> elapsed_seconds = end_time - start_time;
+      // 输出时间间隔
+      std::cout << "程序执行时间: " << elapsed_seconds.count() << " 秒" << std::endl;
+
       std::vector<CartesianState> opt_path;
       for (int k = 0; k <= N; ++k) {
         double px = solver_al.GetiLQRSolver().GetTrajectory()->State(k)[0];
@@ -143,21 +154,21 @@ class VehicleProblem {
         opt_path.emplace_back(new_state);
       }
       double diff = 0;
-        for (int i = 0; i < N + 1; ++i) {
-            diff += pow(opt_path[i].x - ref_states[i].x, 2) + pow(opt_path[i].y - ref_states[i].y, 2);
-        }
-        cout << "diff: " << sqrt(diff) << endl;
-        ref_states_ = opt_path;
-        if(sqrt(diff) < 1.0) {
-            return true;
-        }
+      for (int i = 0; i < N + 1; ++i) {
+          diff += pow(opt_path[i].x - ref_states_[i].x, 2) + pow(opt_path[i].y - ref_states_[i].y, 2);
+      }
+      cout << "diff: " << sqrt(diff) << endl;
+      ref_states_ = opt_path;
+      if(sqrt(diff) < 1.0) {
+          return true;
+      }
     }
     return false;
   }
   
   std::vector<CartesianState> getFinalPath() {return ref_states_;}
-  // altro::problem::Problem MakeProblem(const bool add_constraints = true);
-  altro::problem::Problem MakeProblem(const bool add_constraints = true, Eigen::Vector4d x_init  = Eigen::Vector4d(0, 0, 0, 0));
+  altro::problem::Problem MakeProblem(const bool add_constraints = true);
+  // altro::problem::Problem MakeProblem(const bool add_constraints = true, Eigen::Vector4d x_init  = Eigen::Vector4d(0, 0, 0, 0));
 
   template <int n_size = NStates, int m_size = NControls>
   altro::Trajectory<n_size, m_size> InitialTrajectory();
@@ -166,8 +177,8 @@ class VehicleProblem {
   altro::ilqr::iLQR<n_size, m_size> MakeSolver(const bool alcost = false);
 
   template <int n_size = NStates, int m_size = NControls>
-  // altro::augmented_lagrangian::AugmentedLagrangianiLQR<n_size, m_size> MakeALSolver();
-  altro::augmented_lagrangian::AugmentedLagrangianiLQR<n_size, m_size> MakeALSolver(Eigen::Vector4d x_init = Eigen::Vector4d(0, 0, 0, 0));
+  altro::augmented_lagrangian::AugmentedLagrangianiLQR<n_size, m_size> MakeALSolver();
+  // altro::augmented_lagrangian::AugmentedLagrangianiLQR<n_size, m_size> MakeALSolver(Eigen::Vector4d x_init = Eigen::Vector4d(0, 0, 0, 0));
 
   void SetScenario(Scenario scenario) { scenario_ = scenario; }
 
@@ -176,10 +187,10 @@ class VehicleProblem {
  private:
   Scenario scenario_ = SCCFS;
   float tf = 6.0;
-  double weight_pos = 1;
-  double weight_speed = 1;
-  double weight_acc = 2;
-  double weight_delta = 2;
+  double weight_pos = 1000;
+  double weight_speed = 10;
+  double weight_acc = 100;
+  double weight_delta = 10;
   int frame_count = 0;
 
   std::vector<CartesianState> ref_states_;
@@ -306,27 +317,27 @@ altro::ilqr::iLQR<n_size, m_size> VehicleProblem::MakeSolver(const bool alcost) 
   return solver;
 }
 
-// template <int n_size, int m_size>
-// altro::augmented_lagrangian::AugmentedLagrangianiLQR<n_size, m_size>
-// VehicleProblem::MakeALSolver() {  //test调用了这里
-//   altro::problem::Problem prob = MakeProblem(true);
-//   altro::augmented_lagrangian::AugmentedLagrangianiLQR<n_size, m_size> solver_al(prob);
-//   solver_al.SetTrajectory(
-//       std::make_shared<altro::Trajectory<NStates, NControls>>(InitialTrajectory()));
-//   solver_al.GetiLQRSolver().Rollout();
-//   return solver_al;
-// }
 template <int n_size, int m_size>
 altro::augmented_lagrangian::AugmentedLagrangianiLQR<n_size, m_size>
-VehicleProblem::MakeALSolver(Eigen::Vector4d x_init) {
-  altro::problem::Problem prob = MakeProblem(true, x_init);
+VehicleProblem::MakeALSolver() {  //test调用了这里
+  altro::problem::Problem prob = MakeProblem(true);
   altro::augmented_lagrangian::AugmentedLagrangianiLQR<n_size, m_size> solver_al(prob);
   solver_al.SetTrajectory(
       std::make_shared<altro::Trajectory<NStates, NControls>>(InitialTrajectory()));
   solver_al.GetiLQRSolver().Rollout();
-
   return solver_al;
 }
+// template <int n_size, int m_size>
+// altro::augmented_lagrangian::AugmentedLagrangianiLQR<n_size, m_size>
+// VehicleProblem::MakeALSolver(Eigen::Vector4d x_init) {
+//   altro::problem::Problem prob = MakeProblem(true, x_init);
+//   altro::augmented_lagrangian::AugmentedLagrangianiLQR<n_size, m_size> solver_al(prob);
+//   solver_al.SetTrajectory(
+//       std::make_shared<altro::Trajectory<NStates, NControls>>(InitialTrajectory()));
+//   solver_al.GetiLQRSolver().Rollout();
+
+//   return solver_al;
+// }
 
 }  // namespace problems
 }  // namespace altro

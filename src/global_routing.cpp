@@ -258,31 +258,32 @@ void GlobalRouting::thread_routing()
   while (n.ok())
   {
     //发布障碍可视化
-      // if(obstacle_MarkerArray.markers.size() > (obs.getNum() -  obs.getMoveInds().size() + 1))
-      //   obstacle_MarkerArray.markers.resize(obs.getNum() -  obs.getMoveInds().size() + 1);
-      // for(auto& j : obs.getMoveInds()) { 
-      //   // cout << "moving ind: " << j << endl;
-      //   visualization_msgs::Marker marker;
-      //   auto cur_obs = obs.getObs()[j];
-      //   MatrixXd poly(2, cur_obs.vertex_x.size());
-      //   for (int i = 0; i < cur_obs.vertex_x.size(); ++i) {
-      //     poly(0, i) = cur_obs.vertex_x[i];
-      //     poly(1, i) = cur_obs.vertex_y[i];
-      //   }
-      //   poly += cur_obs.speed * MatrixXd::Ones(1, 4) * 0.1 *  frame_count; 
-      //   Turn_obstacles_into_squares(marker, poly, j + 1);
-      //   obstacle_MarkerArray.markers.emplace_back(marker);
-      // }
-      // if(obstacle_MarkerArray.markers.size() > (obs.getNum() -  MovingObs::num + 1))
-      if(obstacle_MarkerArray.markers.size() > 10)
-          obstacle_MarkerArray.markers.resize(10);
-        for(auto& traj : MovingObs::obs_traj) { 
-          // cout << "moving ind: " << j << endl;
-          visualization_msgs::Marker marker;
-          auto& cur_obs = traj[frame_count];
-          Turn_moving_obstacles_into_squares(marker, cur_obs, 10);
-          obstacle_MarkerArray.markers.emplace_back(marker);
+      if(obstacle_MarkerArray.markers.size() > (obs.getNum() -  obs.getMoveInds().size() + 1))
+        obstacle_MarkerArray.markers.resize(obs.getNum() -  obs.getMoveInds().size() + 1);
+      for(auto& j : obs.getMoveInds()) { 
+        // cout << "moving ind: " << j << endl;
+        visualization_msgs::Marker marker;
+        auto cur_obs = obs.getObs()[j];
+        MatrixXd poly(2, cur_obs.vertex_x.size());
+        for (int i = 0; i < cur_obs.vertex_x.size(); ++i) {
+          poly(0, i) = cur_obs.vertex_x[i];
+          poly(1, i) = cur_obs.vertex_y[i];
         }
+        poly += cur_obs.speed * MatrixXd::Ones(1, 4) * 0.1 *  frame_count; 
+        Turn_obstacles_into_squares(marker, poly, j + 1);
+        obstacle_MarkerArray.markers.emplace_back(marker);
+      }
+      
+      // // if(obstacle_MarkerArray.markers.size() > (obs.getNum() -  MovingObs::num + 1))
+      // if(obstacle_MarkerArray.markers.size() > 10)
+      //     obstacle_MarkerArray.markers.resize(10);
+      //   for(auto& traj : MovingObs::obs_traj) { 
+      //     // cout << "moving ind: " << j << endl;
+      //     visualization_msgs::Marker marker;
+      //     auto& cur_obs = traj[frame_count];
+      //     Turn_moving_obstacles_into_squares(marker, cur_obs, 10);
+      //     obstacle_MarkerArray.markers.emplace_back(marker);
+      //   }
       
     // Start_dynamic 局部规划轨迹开始生成
     if (is_start_pose_set == true && is_goal_pose_set == true && Start_dynamic == "1")

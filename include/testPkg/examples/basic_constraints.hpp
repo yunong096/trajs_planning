@@ -150,5 +150,115 @@ class ControlBound : public constraints::Constraint<constraints::NegativeOrthant
   std::vector<size_t> index_upper_bound_;
 };
 
+class StateBound : public constraints::Constraint<constraints::NegativeOrthant> {
+ public:
+  explicit StateBound(const int n)
+      : n_(n),
+        lower_bound_(n, -std::numeric_limits<double>::infinity()),
+        upper_bound_(n, +std::numeric_limits<double>::infinity()) {}
+
+  StateBound(const std::vector<double>& lb, const std::vector<double>& ub)
+      : n_(lb.size()), lower_bound_(lb), upper_bound_(ub) {
+    ALTRO_ASSERT(lb.size() == ub.size(), "Upper and lower bounds must have the same length.");
+    ALTRO_ASSERT(lb.size() > 0, "Cannot pass in empty bounds.");
+    GetFiniteIndices(upper_bound_, &index_upper_bound_);
+    GetFiniteIndices(lower_bound_, &index_lower_bound_);
+    ValidateBounds();
+  }
+
+  void SetUpperBound(const std::vector<double>& ub) {
+    ALTRO_ASSERT(ub.size() == static_cast<size_t>(n_),
+                 "Inconsistent control dimension when setting upper bound.");
+    upper_bound_ = ub;
+    GetFiniteIndices(upper_bound_, &index_upper_bound_);
+    ValidateBounds();
+  }
+
+  void SetUpperBound(std::vector<double>&& ub) {
+    ALTRO_ASSERT(ub.size() == static_cast<size_t>(n_),
+                 "Inconsistent control dimension when setting upper bound.");
+    upper_bound_ = std::move(ub);
+    GetFiniteIndices(upper_bound_, &index_upper_bound_);
+    ValidateBounds();
+  }
+
+  void SetLowerBound(const std::vector<double>& lb) {
+    ALTRO_ASSERT(lb.size() == static_cast<size_t>(n_),
+                 "Inconsistent control dimension when setting lower bound.");
+    lower_bound_ = lb;
+    GetFiniteIndices(lower_bound_, &index_lower_bound_);
+    ValidateBounds();
+  }
+
+  void SetLowerBound(std::vector<double>&& lb) {
+    ALTRO_ASSERT(lb.size() == static_cast<size_t>(n_),
+                 "Inconsistent control dimension when setting lower bound.");
+    lower_bound_ = std::move(lb);
+    GetFiniteIndices(lower_bound_, &index_lower_bound_);
+    ValidateBounds();
+  }
+
+  std::string GetLabel() const override { return "Control Bound";}
+
+  int ControlDimension() const override { return n_; }
+
+  int OutputDimension() const override {
+    return index_lower_bound_.size() + index_upper_bound_.size();
+  }
+
+  void Evaluate(const VectorXdRef& x, const VectorXdRef& /*u*/,
+                Eigen::Ref<VectorXd> c) override {
+    ALTRO_ASSERT(x.size() == n_, "Inconsistent control dimension when evaluating control bound.");
+
+    for (size_t i = 0; i < index_lower_bound_.size(); ++i) {
+      size_t j = index_lower_bound_[i];
+      c(i) = lower_bound_.at(j) - x(j);
+    }
+    int offset = index_lower_bound_.size();
+    for (size_t i = 0; i < index_upper_bound_.size(); ++i) {
+      size_t j = index_upper_bound_[i];
+      c(i + offset) = x(j) - upper_bound_.at(j);
+    }
+  }
+
+  void Jacobian(const VectorXdRef& x, const VectorXdRef& u,
+                Eigen::Ref<MatrixXd> jac) override {
+    (void) x; // surpress erroneous unused variable error
+    ALTRO_ASSERT(x.size() == n_, "Inconsistent control dimension when evaluating control bound.");
+    jac.setZero();
+
+    for (size_t i = 0; i < index_lower_bound_.size(); ++i) {
+      size_t j = index_lower_bound_[i];
+      jac(i, j) = -1;
+    }
+    int offset = index_lower_bound_.size();
+    for (size_t i = 0; i < index_upper_bound_.size(); ++i) {
+      size_t j = index_upper_bound_[i];
+      jac(i + offset, j) = 1;
+    }
+  }
+
+ private:
+  void ValidateBounds() {
+    for (int i = 0; i < n_; ++i) {
+      ALTRO_ASSERT(lower_bound_[i] <= upper_bound_[i],
+                   "Lower bound isn't less than the upper bound.");
+    }
+  }
+  static void GetFiniteIndices(const std::vector<double>& bound, std::vector<size_t>* index) {
+    index->clear();
+    for (size_t i = 0; i < bound.size(); ++i) {
+      if (std::abs(bound[i]) < std::numeric_limits<double>::max()) {
+        index->emplace_back(i);
+      }
+    }
+  }
+  int n_;
+  std::vector<double> lower_bound_;
+  std::vector<double> upper_bound_;
+  std::vector<size_t> index_lower_bound_;
+  std::vector<size_t> index_upper_bound_;
+};
+
 }  // namespace examples
 }  // namespace altro

@@ -9,18 +9,17 @@ VehicleProblem::VehicleProblem(int count) {
   frame_count = count;
 }
 
-altro::problem::Problem VehicleProblem::MakeProblem(const bool add_constraints, Eigen::Vector4d x_init) {
+altro::problem::Problem VehicleProblem::MakeProblem(const bool add_constraints){
   altro::problem::Problem prob(N);
-
   // goal = std::make_shared<altro::examples::GoalConstraint>(xf);
 
   float h;
-   if (scenario_ ==  SCCFS) {
+  //  if (scenario_ ==  SCCFS) {
     tf = 6.0;
     h = GetTimeStep();
 
     // Q.diagonal().setConstant(1.0 * h);
-    Q << weight_pos, 0,  0, 0, 
+    Q << weight_pos * h, 0,  0, 0, 
          0, weight_pos * h, 0, 0, 
          0, 0, 0, 0, 
          0, 0, 0, weight_speed * h;
@@ -28,17 +27,16 @@ altro::problem::Problem VehicleProblem::MakeProblem(const bool add_constraints, 
     R << weight_acc * h, 0,
          0, weight_delta * h;
     // Qf.diagonal().setConstant(10.0);
-    Qf << weight_pos, 0,  0, 0, 
+    Qf << weight_pos * h, 0,  0, 0, 
          0, weight_pos * h, 0, 0, 
          0, 0, 0, 0, 
          0, 0, 0, weight_speed * h;
-    x0 = x_init;
     // u0 << 0.0, 10.0;
     uref << 0.0, 0.0;
 
     lb = {-a_bnd, -delta_bnd};
     ub = {a_bnd, delta_bnd};
-  }
+  // }
   // Cost Function
   for (int k = 0; k < N; ++k) {
     xf = Vector4d(ori_states_[k].x, ori_states_[k].y, ori_states_[k].theta, 10/3.6);
@@ -60,13 +58,14 @@ altro::problem::Problem VehicleProblem::MakeProblem(const bool add_constraints, 
   if (add_constraints) {
     for (int k = 0; k < N; ++k) {
       prob.SetConstraint(std::make_shared<altro::examples::ControlBound>(lb, ub), k); //上下界约束
+      prob.SetConstraint(std::make_shared<altro::examples::StateBound>(lb_state, ub_state), k); //上下界约束
     }
     // prob.SetConstraint(std::make_shared<examples::GoalConstraint>(xf), N); //终点约束
   }
 
   // Initial State
   prob.SetInitialState(x0);
-
+//  ROS_WARN("MakeProblem Finished");
   return prob;
 }
 

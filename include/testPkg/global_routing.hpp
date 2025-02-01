@@ -101,7 +101,7 @@ public:
     marker.pose.position.z = 0.2;
     // cout << Length << " "<< width<< " " << marker.pose.position.x<< " " << marker.pose.position.y<< " " << endl;
     // cout << fabs(poly(0, 0) - poly(0, 1)) << endl;
-      cout << "plot moving obs: " << marker.pose.position.x << ", " << marker.pose.position.y << endl;
+      // cout << "plot moving obs: " << marker.pose.position.x << ", " << marker.pose.position.y << endl;
       marker.scale.x = Length;
       marker.scale.y = width;
       marker.color.r = 0.0f;
