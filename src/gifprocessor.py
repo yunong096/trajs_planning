@@ -33,8 +33,8 @@ import matplotlib.pyplot as plt
 # plt.show()  # 显示图表
 
 # 定义输入和输出文件的路径
-input_file_path ='globalpoints_data.txt'
-output_file_path = 'parking2.txt'
+input_file_path ='parking1.txt'
+output_file_path = 'parking3.txt'
  
 # 打开输入文件以读取模式，并读取所有行到列表中
 with open(input_file_path, 'r', encoding='utf-8') as infile:

@@ -10,6 +10,7 @@
 #include "nmpc2.hpp"
 
 namespace traj_utils {
+  
 class VehicleParam {
  public:
   inline double width() const { return width_; }

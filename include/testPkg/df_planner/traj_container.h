@@ -11,6 +11,7 @@ struct FlatTrajData {
   Eigen::MatrixXd final_state;                // end flat state (2, 3)
   std::vector<Eigen::Vector3d> corridor_pts;  // state list
   double duration;
+  int singul = 1;
 };
 
 }  // namespace traj_utils

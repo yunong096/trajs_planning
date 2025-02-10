@@ -27,6 +27,8 @@ class TrajPlanner {
     const vector<CartesianState>& last_path, 
     vector<CartesianState>& final_result);
 
+  bool RunGlobalOpt(vector<Vector2d>& raw_pt);
+
   bool CalKeyPoint(const vector<CartesianState>& source_path,
                               traj_utils::FlatTrajData* trajs, double duration);
     bool CalExtremePoint(const CartesianState& init_state,
@@ -143,5 +145,246 @@ class TrajPlanner {
         for(auto& state : path) {
             // cout << "df_state: " << state.x << ", " << state.y << ", " << state.speed << ", " << state.theta << ", " << state.acc << ", " << state.kappa << endl;
         }
+    }
+
+    void findCorners(const std::vector<Vector2d>& pt_init, std::vector<int>& index_corner) {
+        index_corner.clear();
+        index_corner.emplace_back(0);
+        int count = 0;
+        for (size_t i = 1; i < pt_init.size() - 1; ++i) {
+            double dx1 = pt_init[i](0) - pt_init[i - 1](0);
+            double dx2 = pt_init[i + 1](0) - pt_init[i](0);
+            double dy1 = pt_init[i](1) - pt_init[i - 1](1);
+            double dy2 = pt_init[i + 1](1) - pt_init[i](1);
+            double inner_product = dx1 * dx2 + dy1 * dy2;
+            if (inner_product < 0) {
+                count++; // 记录尖点个数
+                index_corner.emplace_back(i);
+            }
+        }
+        index_corner.emplace_back(pt_init.size() - 1);
+        std::cout << "Number of corners: " << count << std::endl;
+    }
+
+    bool TrajPlanner::getRectangleConst(std::vector<Eigen::Vector3d> statelist){
+        hPolys_.clear();
+        double resolution = 1.0; //x1 y0.2
+        double step = resolution * 1.0;
+        double limitBound = 10.0;
+        visualization_msgs::Marker  carMarkers;
+        //generate a rectangle for this state px py yaw
+        for(const auto state : statelist){
+            //generate a hPoly
+            Eigen::MatrixXd hPoly;
+            hPoly.resize(4, 4);
+            Eigen::Matrix<int,4,1> NotFinishTable = Eigen::Matrix<int,4,1>(1,1,1,1);      
+            Eigen::Vector2d sourcePt = state.head(2);
+            Eigen::Vector2d rawPt = sourcePt;
+            double yaw = state[2];
+            bool test = false;
+            common::VehicleParam sourceVp,rawVp;
+            Eigen::Matrix2d egoR;
+            egoR << cos(yaw), -sin(yaw),
+                    sin(yaw), cos(yaw);
+            common::VehicleParam vptest;
+            // map_itf_->CheckIfCollisionUsingPosAndYaw(vptest,state,&test); //检测给的初始点是否合规
+    
+            Eigen::Vector4d expandLength;
+            expandLength << 0.0, 0.0, 0.0, 0.0;
+            //dcr width length
+            while(NotFinishTable.norm()>0){ 
+            //+dy  +dx -dy -dx  
+                for(int i = 0; i<4; i++){
+                    if(!NotFinishTable[i]) continue;
+                    //get the new source and vp
+                    Eigen::Vector2d NewsourcePt = sourcePt;
+                    common::VehicleParam NewsourceVp = sourceVp;
+                    Eigen::Vector2d point1,point2,newpoint1,newpoint2;
+
+                    bool isocc = false;
+                    switch (i)
+                    {
+                    //+dy
+                    case 0: //左上左下，以及他们沿着横向扩张后的位置
+                        point1 = sourcePt + egoR * Eigen::Vector2d(sourceVp.length()/2.0+sourceVp.d_cr(),sourceVp.width()/2.0);
+                        point2 = sourcePt + egoR * Eigen::Vector2d(-sourceVp.length()/2.0+sourceVp.d_cr(),sourceVp.width()/2.0);
+                        newpoint1 = sourcePt + egoR * Eigen::Vector2d(sourceVp.length()/2.0+sourceVp.d_cr(),sourceVp.width()/2.0+step);   
+                        newpoint2 = sourcePt + egoR * Eigen::Vector2d(-sourceVp.length()/2.0+sourceVp.d_cr(),sourceVp.width()/2.0+step);
+                        //1 new1 new1 new2 new2 2
+                        map_itf_->CheckIfCollisionUsingLine(point1,newpoint1,&isocc,resolution/2.0);
+                        if(isocc){
+                        NotFinishTable[i] = 0.0;
+                        break;
+                        }
+                        map_itf_->CheckIfCollisionUsingLine(newpoint1,newpoint2,&isocc,resolution/2.0);
+                        if(isocc){
+                        NotFinishTable[i] = 0.0;
+                        break;
+                        }
+                        map_itf_->CheckIfCollisionUsingLine(newpoint2,point2,&isocc,resolution/2.0);
+                        if(isocc){
+                        NotFinishTable[i] = 0.0;
+                        break;
+                        }
+                        expandLength[i] += step;
+                        if(expandLength[i] >= limitBound){
+                        NotFinishTable[i] = 0.0;
+                        break;
+                        }
+                        NewsourcePt = NewsourcePt + egoR * Eigen::Vector2d(0,step/2.0);
+                        NewsourceVp.set_width(NewsourceVp.width() + step);
+                        sourcePt = NewsourcePt;
+                        sourceVp = NewsourceVp;
+                        break;
+                    //+dx
+                    case 1: //右上左上，沿纵向扩张
+                        point1 = sourcePt + egoR * Eigen::Vector2d(sourceVp.length()/2.0+sourceVp.d_cr(),-sourceVp.width()/2.0);
+                        point2 = sourcePt + egoR * Eigen::Vector2d(sourceVp.length()/2.0+sourceVp.d_cr(),sourceVp.width()/2.0);
+                        newpoint1 = sourcePt + egoR * Eigen::Vector2d(step+sourceVp.length()/2.0+sourceVp.d_cr(),-sourceVp.width()/2.0);   
+                        newpoint2 = sourcePt + egoR * Eigen::Vector2d(step+sourceVp.length()/2.0+sourceVp.d_cr(),sourceVp.width()/2.0);
+                        //1 new1 new1 new2 new2 2
+                        map_itf_->CheckIfCollisionUsingLine(point1,newpoint1,&isocc,resolution/2.0);
+                        if(isocc){
+                        NotFinishTable[i] = 0.0;
+                        break;
+                        }
+                        map_itf_->CheckIfCollisionUsingLine(newpoint1,newpoint2,&isocc,resolution/2.0);
+                        if(isocc){
+                        NotFinishTable[i] = 0.0;
+                        break;
+                        }
+                        map_itf_->CheckIfCollisionUsingLine(newpoint2,point2,&isocc,resolution/2.0);
+                        if(isocc){
+                        NotFinishTable[i] = 0.0;
+                        break;
+                        }
+                        expandLength[i] += step;
+                        if(expandLength[i] >= limitBound){
+                        NotFinishTable[i] = 0.0;
+                        break;
+                        }
+                        NewsourcePt = NewsourcePt + egoR * Eigen::Vector2d(step/2.0,0.0);
+                        NewsourceVp.set_length(NewsourceVp.length() + step);
+                        sourcePt = NewsourcePt;
+                        sourceVp = NewsourceVp;
+                        break;
+                    //-dy
+                    case 2: //右下右上，沿横向扩张
+                        point1 = sourcePt + egoR * Eigen::Vector2d(-sourceVp.length()/2.0+sourceVp.d_cr(),-sourceVp.width()/2.0);
+                        point2 = sourcePt + egoR * Eigen::Vector2d(sourceVp.length()/2.0+sourceVp.d_cr(),-sourceVp.width()/2.0);
+                        newpoint1 = sourcePt + egoR * Eigen::Vector2d(-sourceVp.length()/2.0+sourceVp.d_cr(),-sourceVp.width()/2.0-step);   
+                        newpoint2 = sourcePt + egoR * Eigen::Vector2d(sourceVp.length()/2.0+sourceVp.d_cr(),-sourceVp.width()/2.0-step);
+                        //1 new1 new1 new2 new2 2
+                        map_itf_->CheckIfCollisionUsingLine(point1,newpoint1,&isocc,resolution/2.0);
+                        if(isocc){
+                        NotFinishTable[i] = 0.0;
+                        break;
+                        }
+                        map_itf_->CheckIfCollisionUsingLine(newpoint1,newpoint2,&isocc,resolution/2.0);
+                        if(isocc){
+                        NotFinishTable[i] = 0.0;
+                        break;
+                        }
+                        map_itf_->CheckIfCollisionUsingLine(newpoint2,point2,&isocc,resolution/2.0);
+                        if(isocc){
+                        NotFinishTable[i] = 0.0;
+                        break;
+                        }
+                        expandLength[i] += step;
+                        if(expandLength[i] >= limitBound){
+                        NotFinishTable[i] = 0.0;
+                        break;
+                        }
+                        NewsourcePt = NewsourcePt + egoR * Eigen::Vector2d(0,-step/2.0);
+                        NewsourceVp.set_width(NewsourceVp.width() + step);
+                        sourcePt = NewsourcePt;
+                        sourceVp = NewsourceVp;
+                        break;
+                    //-dx
+                    case 3: //左下右下，沿纵向扩张
+                        point1 = sourcePt + egoR * Eigen::Vector2d(-sourceVp.length()/2.0+sourceVp.d_cr(),sourceVp.width()/2.0);
+                        point2 = sourcePt + egoR * Eigen::Vector2d(-sourceVp.length()/2.0+sourceVp.d_cr(),-sourceVp.width()/2.0);
+                        newpoint1 = sourcePt + egoR * Eigen::Vector2d(-sourceVp.length()/2.0+sourceVp.d_cr()-step,sourceVp.width()/2.0);
+                        newpoint2 = sourcePt + egoR * Eigen::Vector2d(-sourceVp.length()/2.0+sourceVp.d_cr()-step,-sourceVp.width()/2.0);
+                        //1 new1 new1 new2 new2 2
+                        map_itf_->CheckIfCollisionUsingLine(point1,newpoint1,&isocc,resolution/2.0);
+                        if(isocc){
+                        NotFinishTable[i] = 0.0;
+                        break;
+                        }
+                        map_itf_->CheckIfCollisionUsingLine(newpoint1,newpoint2,&isocc,resolution/2.0);
+                        if(isocc){
+                        NotFinishTable[i] = 0.0;
+                        break;
+                        }
+                        map_itf_->CheckIfCollisionUsingLine(newpoint2,point2,&isocc,resolution/2.0);
+                        if(isocc){
+                        NotFinishTable[i] = 0.0;
+                        break;
+                        }
+                        expandLength[i] += step;
+                        if(expandLength[i] >= limitBound){
+                        NotFinishTable[i] = 0.0;
+                        break;
+                        }
+                        NewsourcePt = NewsourcePt + egoR * Eigen::Vector2d(-step/2.0,0.0);
+                        NewsourceVp.set_length(NewsourceVp.length() + step);
+                        sourcePt = NewsourcePt;
+                        sourceVp = NewsourceVp;
+                        break;
+                    }   
+                }
+            }
+            Eigen::Vector2d point1,norm1;
+            point1 = rawPt+egoR*Eigen::Vector2d(rawVp.length()/2.0+rawVp.d_cr()+expandLength[1],rawVp.width()/2.0+expandLength[0]);
+            norm1 << -sin(yaw), cos(yaw);
+            hPoly.col(0).head<2>() = norm1;
+            hPoly.col(0).tail<2>() = point1;
+            Eigen::Vector2d point2,norm2;
+            // point2 = sourcePt+egoR*Eigen::Vector2d(sourceVp.length()/2.0+sourceVp.d_cr(),-sourceVp.width()/2.0);
+            point2 = rawPt+egoR*Eigen::Vector2d(rawVp.length()/2.0+rawVp.d_cr()+expandLength[1],-rawVp.width()/2.0-expandLength[2]);
+            norm2 << cos(yaw), sin(yaw);
+            hPoly.col(1).head<2>() = norm2;
+            hPoly.col(1).tail<2>() = point2;
+            Eigen::Vector2d point3,norm3;
+            // point3 = sourcePt+egoR*Eigen::Vector2d(-sourceVp.length()/2.0+sourceVp.d_cr(),-sourceVp.width()/2.0);
+            point3 = rawPt+egoR*Eigen::Vector2d(-rawVp.length()/2.0+rawVp.d_cr()-expandLength[3],-rawVp.width()/2.0-expandLength[2]);
+            norm3 << sin(yaw), -cos(yaw);
+            hPoly.col(2).head<2>() = norm3;
+            hPoly.col(2).tail<2>() = point3;
+            Eigen::Vector2d point4,norm4;
+            // point4 = sourcePt+egoR*Eigen::Vector2d(-sourceVp.length()/2.0+sourceVp.d_cr(),sourceVp.width()/2.0);
+            point4 = rawPt+egoR*Eigen::Vector2d(-rawVp.length()/2.0+rawVp.d_cr()-expandLength[3],rawVp.width()/2.0+expandLength[0]);
+            norm4 << -cos(yaw), -sin(yaw);
+            hPoly.col(3).head<2>() = norm4;
+            hPoly.col(3).tail<2>() = point4;
+            hPolys_.push_back(hPoly);
+        };
+        return true;
+    }
+
+    bool CheckIfCollisionUsingLine(const Eigen::Vector2d p1, 
+                                           const Eigen::Vector2d p2, bool* res, double checkl){
+        for(double dl = 0.0; dl < (p2-p1).norm(); dl+=checkl){
+            Eigen::Vector2d pos = (p2-p1)*dl/(p2-p1).norm()+p1;
+            if(CheckCollisionUsingGlobalPosition(pos)){
+                return true;
+            }
+        }
+        return CheckCollisionUsingGlobalPosition(p2);
+    }
+
+    bool CheckCollisionUsingGlobalPosition(const Eigen::Vector2d p1) {
+        double x = p1(0);
+        double y = p2(0);
+        if(x >= 7.7 && x <= 83.8 && y >= 61.3 && y <= 68.3)
+            return false;
+        else if (x >= 76.7 && x <= 83.8 && y >= 50.2 && y <= 61.3)
+            return false;
+        else if (x >= 76.7 && x <= 138.5 && y >= 43.1 && y <= 50.2)
+            return false;
+        else if (x >= 99.3 && x <= 101.9 && y >= 50.2 && y <= 55.9)
+            return false;
+        return true;
     }
 };

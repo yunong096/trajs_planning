@@ -178,7 +178,7 @@ include_directories(
 add_executable(cfstest  src/main_test.cpp 
                                   src/SCCFS.cpp 
                                   src/CoarsePathGenerator.cpp
-                                  src/CoarsePathGenerator.cpp
+                                  # src/CoarsePathGenerator.cpp
                                   include/testPkg/modules/planning/planning_base/reference_line/spiral_problem_interface.cc
                                   include/testPkg/modules/common/math/math_utils.cc
                                   include/testPkg/modules/common/math/integral.cc
