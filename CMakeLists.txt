@@ -195,6 +195,7 @@ add_executable(dynamic_routing  src/dynamic_routing_node.cpp
                                   src/dp_planner.cpp
                                   src/nmpc2.cpp
                                   src/traj_optimizer.cpp
+                                  src/traj_optimizer_global.cpp
                                   src/traj_manager.cpp
                                   src/altro_optimizer.cpp
                                   include/testPkg/examples/vehicle.cpp

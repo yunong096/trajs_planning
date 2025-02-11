@@ -1,7 +1,4 @@
 #include "df_planner/traj_optimizer_global.h"
-#include "df_planner/constants.h"
-#include "df_planner/lbfgs_global.hpp"
-#include "df_planner/lbfgs.h"
 
 
 namespace plan_manage {
@@ -63,6 +60,8 @@ namespace plan_manage {
         max_vel = max_backward_vel;
         max_acc = max_backward_acc;
       }
+      ROS_WARN("singul set finished");
+
       if(iniState_container[i].col(1).norm()>=max_vel){
         iniState_container[i].col(1) = iniState_container[i].col(1).normalized()*(max_vel-1.0e-2);
       }
@@ -76,6 +75,7 @@ namespace plan_manage {
       if(finState_container[i].col(2).norm()>=max_acc){
         finState_container[i].col(2) = finState_container[i].col(2).normalized()*(max_acc-1.0e-2);
       }
+      ROS_WARN("init and final state set finished");
       
 
       jerkOpt_container[i].reset(piece_num_);
@@ -83,6 +83,7 @@ namespace plan_manage {
 
 
     }  
+    ROS_WARN("piece set finished");
     variable_num_ += trajnum;
     variable_num_ += 2 * (trajnum-1);
     variable_num_ += 1 * (trajnum-1); 
@@ -135,7 +136,7 @@ namespace plan_manage {
     lbfgs_params.max_iterations = 12000;
     t_now_ = now;
 
-
+    ROS_WARN("lbfgs setparam finished");
 
 
 
@@ -288,7 +289,7 @@ namespace plan_manage {
 
       opt->jerkOpt_container[trajid].generate(P_container[trajid],T[trajid] / opt->piece_num_container[trajid],IniS,FinS);
       opt->jerkOpt_container[trajid].initSmGradCost(); // Smoothness cost   
-      smoo_cost = opt->jerkOpt_container[trajid].getTrajJerkCost();
+      smoo_cost = opt->jerkOpt_container[trajid].getTrajJerkCost(1);
       opt->addPVAGradCost2CT( obs_surround_feas_qvar_costs, trajid, trajtimes[trajid]); // Time int cost
       //Get gradT gradC
       total_smcost += smoo_cost;
@@ -846,69 +847,9 @@ namespace plan_manage {
                                             double &grad_prev_t,
                                             double &costp)
   {
-    if (i_dp <= 0) return false;
-    if (surround_trajs_->size() < 1) return false;
-
-    bool ret = false;
-
-    gradp.setZero();
-    gradt = 0;
-    grad_prev_t = 0;
-    costp = 0;
-
-    const double CLEARANCE2 = (surround_clearance_ * 1.5) * (surround_clearance_ * 1.5);
-    // only counts when the distance is smaller than clearance
-
-    constexpr double b = 1.0, inv_b2 = 1 / b / b;
-
-    double pt_time = t_now_ + t;
-
-    if (surround_trajs_->size() < 1) return false;
-
-    for (size_t id = 0; id < surround_trajs_->size(); id++)
-    {
-
-      double traj_i_satrt_time = surround_trajs_->at(id).start_time;
-
-      Eigen::Vector2d surround_p, surround_v;
-      if (pt_time < traj_i_satrt_time + surround_trajs_->at(id).duration)
-      {
-        surround_p = surround_trajs_->at(id).traj.getPos(pt_time - traj_i_satrt_time);
-        surround_v = surround_trajs_->at(id).traj.getdSigma(pt_time - traj_i_satrt_time);
-      }
-      else
-      {
-        double exceed_time = pt_time - (traj_i_satrt_time + surround_trajs_->at(id).duration);
-        surround_v = surround_trajs_->at(id).traj.getdSigma(surround_trajs_->at(id).duration);
-        surround_p = surround_trajs_->at(id).traj.getPos(surround_trajs_->at(id).duration) +
-                     exceed_time * surround_v;
-      }
-
-      Eigen::Vector2d dist_vec = p - surround_p;
-      double ellip_dist2 = (dist_vec(0) * dist_vec(0) + dist_vec(1) * dist_vec(1)) * inv_b2;
-      double dist2_err = CLEARANCE2 - ellip_dist2;
-      double dist2_err2 = dist2_err * dist2_err;
-      double dist2_err3 = dist2_err2 * dist2_err;
-
-      if (dist2_err3 > 0) // only accout the cost term when the distance is within the clearance
-      {
-        ret = true;
-
-        costp += wei_surround_ * dist2_err3;
-        Eigen::Vector2d dJ_dP = wei_surround_ * 3 * dist2_err2 * (-2) * Eigen::Vector2d(inv_b2 * dist_vec(0), inv_b2 * dist_vec(1));
-        gradp += dJ_dP;
-        gradt += dJ_dP.dot(v - surround_v);
-        grad_prev_t += dJ_dP.dot(-surround_v);
-      }
-
-      if (min_ellip_dist2_ > ellip_dist2)
-      {
-        min_ellip_dist2_ = ellip_dist2;
-      }
-    }
-
-    return ret;
+  return true;
   }
+
 double PolyTrajOptimizer::debugGradCheck(const int i_dp, // index of constraint point
                                          double t, // current absolute time
                                         Eigen::Vector2d sigma, // the rear model 
@@ -916,388 +857,389 @@ double PolyTrajOptimizer::debugGradCheck(const int i_dp, // index of constraint 
                                         Eigen::Vector2d ddsigma,                                  
                                         const int trajid, const int sur_id,double res_t,Eigen::Matrix<double, 6, 2> c,int i ,int j,
                                         double omg,double step,double wei_surround_, int K){
-  Eigen::Matrix2d ego_R, help_R;                                          
-  int singul_ = singul_container[trajid];
-  if (surround_trajs_==NULL||surround_trajs_->size() < 1) return false;
-  double alpha = 100.0, d_min = surround_clearance_ + std::log(8.0) / alpha; // may have problems hzc
-  double pt_time ;
-  double traj_i_satrt_time = surround_trajs_->at(sur_id).start_time;
+  return 0.0;
+  // Eigen::Matrix2d ego_R, help_R;                                          
+  // int singul_ = singul_container[trajid];
+  // if (surround_trajs_==NULL||surround_trajs_->size() < 1) return false;
+  // double alpha = 100.0, d_min = surround_clearance_ + std::log(8.0) / alpha; // may have problems hzc
+  // double pt_time ;
+  // double traj_i_satrt_time = surround_trajs_->at(sur_id).start_time;
   
-  double dG_dsd, temp0, temp0_reci, temp1, temp2, temp3, temp4, temp5, temp6, temp7;
-  double temp_sur0, temp_sur_reci0, temp_sur1, temp_sur2, temp_sur3;
-  Eigen::Vector2d temp_vec1, temp_vec2, temp_vec3, temp_vec4;
-  Eigen::Matrix<double, 2, 8> grad_sd_sigma, grad_sd_dsigma;
-  Eigen::Matrix<double, 2, 4> ego_bound_points, surround_bound_points;
-  Eigen::VectorXd grad_sd_rt(8), grad_sd_prevt(8);
-  Eigen::VectorXd signed_dists(8),   ego_signed_dists1(4), ego_signed_dists2(4),ego_signed_dists3(4), ego_signed_dists4(4),
-        surround_signed_dists1(4), surround_signed_dists2(4),surround_signed_dists3(4), surround_signed_dists4(4);
-  Eigen::Vector2d surround_p, surround_v, surround_a;
-  Eigen::Matrix2d surround_R,help_surround_R;
-  Eigen::Vector2d temp_point;
-  double surround_exp_sum1, surround_exp_sum2,surround_exp_sum3,surround_exp_sum4,
-          ego_exp_sum1, ego_exp_sum2,ego_exp_sum3, ego_exp_sum4, exp_sum;
-  double z_h0;
+  // double dG_dsd, temp0, temp0_reci, temp1, temp2, temp3, temp4, temp5, temp6, temp7;
+  // double temp_sur0, temp_sur_reci0, temp_sur1, temp_sur2, temp_sur3;
+  // Eigen::Vector2d temp_vec1, temp_vec2, temp_vec3, temp_vec4;
+  // Eigen::Matrix<double, 2, 8> grad_sd_sigma, grad_sd_dsigma;
+  // Eigen::Matrix<double, 2, 4> ego_bound_points, surround_bound_points;
+  // Eigen::VectorXd grad_sd_rt(8), grad_sd_prevt(8);
+  // Eigen::VectorXd signed_dists(8),   ego_signed_dists1(4), ego_signed_dists2(4),ego_signed_dists3(4), ego_signed_dists4(4),
+  //       surround_signed_dists1(4), surround_signed_dists2(4),surround_signed_dists3(4), surround_signed_dists4(4);
+  // Eigen::Vector2d surround_p, surround_v, surround_a;
+  // Eigen::Matrix2d surround_R,help_surround_R;
+  // Eigen::Vector2d temp_point;
+  // double surround_exp_sum1, surround_exp_sum2,surround_exp_sum3,surround_exp_sum4,
+  //         ego_exp_sum1, ego_exp_sum2,ego_exp_sum3, ego_exp_sum4, exp_sum;
+  // double z_h0;
 
-  double offsettime =  t_now_ - traj_i_satrt_time;
+  // double offsettime =  t_now_ - traj_i_satrt_time;
 
-  pt_time= offsettime + t;
+  // pt_time= offsettime + t;
 
-  z_h0 = 1.0/dsigma.norm();
-  ego_R << dsigma(0), -dsigma(1),
-            dsigma(1),  dsigma(0);
-  ego_R = ego_R * z_h0;
-  help_R << ddsigma(0), -ddsigma(1),
-            ddsigma(1),  ddsigma(0);
-  help_R = help_R * z_h0;
+  // z_h0 = 1.0/dsigma.norm();
+  // ego_R << dsigma(0), -dsigma(1),
+  //           dsigma(1),  dsigma(0);
+  // ego_R = ego_R * z_h0;
+  // help_R << ddsigma(0), -ddsigma(1),
+  //           ddsigma(1),  ddsigma(0);
+  // help_R = help_R * z_h0;
 
-  temp0 = dsigma.norm(); //  ||dsigma||_2
+  // temp0 = dsigma.norm(); //  ||dsigma||_2
   
-  if (temp0 != 0.0){
-    temp0_reci = 1.0 / temp0;
-  }else{
-    temp0_reci = 0.0;
-    ROS_ERROR("1111111111111111111111111111111111111111111111111111");
-  }
-  temp1 = double(dsigma.transpose() * sigma) * temp0_reci; //(dsigma.transpose() * sigma) / temp0_reci; // dsigma^T * sigma /  ||dsigma||_2
-  temp2 = double(dsigma.transpose() * B_h * sigma) * temp0_reci;
-  temp3 = temp0_reci * temp0_reci; // ||dsigma||_2^2
-  temp4 = temp3 * temp0_reci; // ||dsigma||_2^3
-  temp5 = double(ddsigma.transpose() * dsigma) * temp3;
-  temp6 = -(temp0 + double(ddsigma.transpose() * sigma) * temp0_reci - temp5 * temp1);
-  temp7 = -(double(ddsigma.transpose() * B_h * sigma) * temp0_reci - temp5 * temp2);
-  temp_vec1 = -(sigma * temp0_reci - temp1 * temp3 * dsigma);
-  temp_vec2 = -(B_h * sigma * temp0_reci - temp2 * temp3 * dsigma);
-
-
-  if (pt_time < surround_trajs_->at(sur_id).duration)
-  {
-    surround_p = surround_trajs_->at(sur_id).traj.getPos(pt_time );
-    surround_v = surround_trajs_->at(sur_id).traj.getdSigma(pt_time );
-    surround_a = surround_trajs_->at(sur_id).traj.getddSigma(pt_time);
-
-    // double tmptime = pt_time-traj_i_satrt_time;
-    // int idx = surround_trajs_->at(sur_id).traj.locatePieceIdx(tmptime);
-    // Eigen::Matrix<double, 6, 2> coef= surround_trajs_->at(sur_id).traj[idx].getCoeffMat().transpose();
-    // double surs1,surs2,surs3,surs4,surs5;
-    // Eigen::Matrix<double, 6, 1> surbeta0, surbeta1,surbeta2;
-    // surs1 = tmptime ;
-    // surs2 = surs1 * surs1;
-    // surs3 = surs2 * surs1;
-    // surs4 = surs2 * surs2;
-    // surs5 = surs4 * surs1;
-    // surbeta0 << 1.0, surs1, surs2, surs3, surs4, surs5;
-    // surbeta1 << 0.0, 1.0, 2.0 * surs1, 3.0 * surs2, 4.0 * surs3, 5.0 * surs4;
-    // surbeta2 << 0.0, 0.0, 2.0, 6.0 * surs1, 12.0 * surs2, 20.0 * surs3;
-    // surround_p = coef.transpose() * surbeta0;
-    // surround_v = coef.transpose() * surbeta1;
-    // surround_a = coef.transpose() * surbeta2;
-
-  }
-  else
-  {
-    double exceed_time = pt_time - surround_trajs_->at(sur_id).duration;
-    surround_a = surround_trajs_->at(sur_id).traj.getddSigma(surround_trajs_->at(sur_id).duration);
-    surround_v = surround_trajs_->at(sur_id).traj.getdSigma(surround_trajs_->at(sur_id).duration) +
-                  exceed_time * surround_a;
-    surround_p = surround_trajs_->at(sur_id).traj.getPos(surround_trajs_->at(sur_id).duration) +
-                  exceed_time * surround_trajs_->at(sur_id).traj.getdSigma(surround_trajs_->at(sur_id).duration) + 
-                  0.5 * surround_a * exceed_time * exceed_time;
-    //surround_a may be set as 0 problem?
-    ROS_ERROR("ASDASDASDASDASDA");
-  }
-
-  temp_sur0 = surround_v.norm();
-  if (temp_sur0 != 0.0)
-  {
-    temp_sur_reci0 = 1.0 / temp_sur0;
-  }
-  else
-  {
-    temp_sur_reci0 = 0.0;
-    ROS_ERROR("2222222222222222222222222222222222222222222222222222222");
-  }
-  
-
-
-
-
-  temp_sur1 = double(surround_v.transpose() * surround_p) * temp_sur_reci0;
-  temp_sur2 = double(surround_v.transpose() * B_h * surround_p) * temp_sur_reci0;
-  temp_sur3 = double(surround_a.transpose() * surround_v) * (temp_sur_reci0 * temp_sur_reci0);
-
-  surround_R << surround_v(0), -surround_v(1),
-      surround_v(1), surround_v(0);
-  surround_R = surround_R * temp_sur_reci0;
-  help_surround_R << surround_a(0),-surround_a(1),
-                      surround_a(1),surround_a(0);
-  help_surround_R = help_surround_R * temp_sur_reci0;
-
-  //  ==========the help intermediate variables.
-
-  // ===========the help intermediate variables.
-  Eigen::Vector4d dtemp1;
-  Eigen::VectorXd sdis; sdis.resize(8);
-  for (unsigned int i = 0; i < 4; i++)
-  {
-    Eigen::Vector2d lz = lz_set_.at(i);
-    lz(0) += singul_ * veh_param_.d_cr();
-
-    temp_point = sigma + ego_R * lz;
-    ego_signed_dists1(i) = double(surround_v.transpose() * temp_point) * temp_sur_reci0; // cr0 
-    ego_signed_dists2(i) = double(-surround_v.transpose() * temp_point) * temp_sur_reci0; //cr1
-    ego_signed_dists3(i) = double(surround_v.transpose() * B_h * temp_point) * temp_sur_reci0; //cr3
-    ego_signed_dists4(i) = double(-surround_v.transpose() * B_h * temp_point) * temp_sur_reci0; //cr2
-    ego_bound_points.col(i) = temp_point; // 2*1
-
-    temp_point = surround_p + surround_R * lz;
-    surround_signed_dists1(i) = double(dsigma.transpose() * temp_point) * temp0_reci; // cr0
-    dtemp1[i] = surround_signed_dists1(i);
-    surround_signed_dists2(i) = double(-dsigma.transpose() * temp_point) * temp0_reci; //cr1
-    surround_signed_dists3(i) = double(dsigma.transpose() * B_h * temp_point) * temp0_reci; //cr3
-    surround_signed_dists4(i) = double(-dsigma.transpose() * B_h * temp_point) * temp0_reci; //cr2
-    surround_bound_points.col(i) = temp_point;
-  }
-
-  // d1_ego - d4_ego
-  signed_dists(0) = log_sum_exp(-alpha, surround_signed_dists1, surround_exp_sum1) - temp1 - veh_param_.d_cr() - veh_param_.length() / 2.0;
-  signed_dists(1) = log_sum_exp(-alpha, surround_signed_dists2, surround_exp_sum2) + temp1 + veh_param_.d_cr() - veh_param_.length() / 2.0;
-  signed_dists(2) = log_sum_exp(-alpha, surround_signed_dists3, surround_exp_sum3) - temp2 - veh_param_.width() / 2.0;
-  signed_dists(3) = log_sum_exp(-alpha, surround_signed_dists4, surround_exp_sum4) + temp2 - veh_param_.width() / 2.0;
-
-  // d1_sur = d4_sur
-  signed_dists(4) = log_sum_exp(-alpha, ego_signed_dists1, ego_exp_sum1) - temp_sur1 - veh_param_.d_cr() - veh_param_.length() / 2.0;
-  signed_dists(5) = log_sum_exp(-alpha, ego_signed_dists2, ego_exp_sum2) + temp_sur1 + veh_param_.d_cr() - veh_param_.length() / 2.0;
-  signed_dists(6) = log_sum_exp(-alpha, ego_signed_dists3, ego_exp_sum3) - temp_sur2 - veh_param_.width() / 2.0;
-  signed_dists(7) = log_sum_exp(-alpha, ego_signed_dists4, ego_exp_sum4) + temp_sur2 - veh_param_.width() / 2.0;
-  // ------------------------------- add cost
-  for(int i = 0;i<8;i++)
-    sdis(i) = signed_dists(i);
-  
-  // std::cout<<"t: "<<t<<" put: "<<pt_time<<std::endl;
-  // std::cout<<"sigma: "<<sigma.transpose()<<" dsigma: "<<dsigma.transpose()<<std::endl;
-  // std::cout<<"surp: "<<surround_p.transpose()<<" surv: "<<surround_v.transpose()<<std::endl;
-  // std::cout<<"yaw: "<<atan2(dsigma[1],dsigma[0])<<" pyaw: "<<atan2(surround_v[1],surround_v[0])<<std::endl;
-  // std::cout<<"signedis: "<<signed_dists.transpose()<<std::endl;
-
-
-
-
-  Eigen::Vector4d at;
-  at << - temp_sur1 - veh_param_.d_cr() - veh_param_.length() / 2.0,
-        + temp_sur1 + veh_param_.d_cr() - veh_param_.length() / 2.0,
-        - temp_sur2 - veh_param_.width() / 2.0 ,+ temp_sur2 - veh_param_.width() / 2.0;
-
-
-  double d_value1 = d_min -log_sum_exp(alpha, signed_dists, exp_sum);
-  double pena1,penaD1;
-  positiveSmoothedL1(d_value1,pena1,penaD1);
-  double f1 = omg * step * wei_surround_ * pena1;
-  //3,2
-
-  double delta = 1.0e-9;
-  
-  // t = 0.0;
-  // res_t = 0.0;
-  // // //i j 
-  // for(int id1 = 0; id1 < i; id1++){
-  //   t += jerkOpt_container[trajid].get_T1()(id1);
+  // if (temp0 != 0.0){
+  //   temp0_reci = 1.0 / temp0;
+  // }else{
+  //   temp0_reci = 0.0;
+  //   ROS_ERROR("1111111111111111111111111111111111111111111111111111");
   // }
-  // res_t = j * (jerkOpt_container[trajid].get_T1()(i)+delta) / K;
-  // t += res_t;
-  // step = (jerkOpt_container[trajid].get_T1()(i)+delta) / K;
+  // temp1 = double(dsigma.transpose() * sigma) * temp0_reci; //(dsigma.transpose() * sigma) / temp0_reci; // dsigma^T * sigma /  ||dsigma||_2
+  // temp2 = double(dsigma.transpose() * B_h * sigma) * temp0_reci;
+  // temp3 = temp0_reci * temp0_reci; // ||dsigma||_2^2
+  // temp4 = temp3 * temp0_reci; // ||dsigma||_2^3
+  // temp5 = double(ddsigma.transpose() * dsigma) * temp3;
+  // temp6 = -(temp0 + double(ddsigma.transpose() * sigma) * temp0_reci - temp5 * temp1);
+  // temp7 = -(double(ddsigma.transpose() * B_h * sigma) * temp0_reci - temp5 * temp2);
+  // temp_vec1 = -(sigma * temp0_reci - temp1 * temp3 * dsigma);
+  // temp_vec2 = -(B_h * sigma * temp0_reci - temp2 * temp3 * dsigma);
 
-  t+=delta;
+
+  // if (pt_time < surround_trajs_->at(sur_id).duration)
+  // {
+  //   surround_p = surround_trajs_->at(sur_id).traj.getPos(pt_time );
+  //   surround_v = surround_trajs_->at(sur_id).traj.getdSigma(pt_time );
+  //   surround_a = surround_trajs_->at(sur_id).traj.getddSigma(pt_time);
+
+  //   // double tmptime = pt_time-traj_i_satrt_time;
+  //   // int idx = surround_trajs_->at(sur_id).traj.locatePieceIdx(tmptime);
+  //   // Eigen::Matrix<double, 6, 2> coef= surround_trajs_->at(sur_id).traj[idx].getCoeffMat().transpose();
+  //   // double surs1,surs2,surs3,surs4,surs5;
+  //   // Eigen::Matrix<double, 6, 1> surbeta0, surbeta1,surbeta2;
+  //   // surs1 = tmptime ;
+  //   // surs2 = surs1 * surs1;
+  //   // surs3 = surs2 * surs1;
+  //   // surs4 = surs2 * surs2;
+  //   // surs5 = surs4 * surs1;
+  //   // surbeta0 << 1.0, surs1, surs2, surs3, surs4, surs5;
+  //   // surbeta1 << 0.0, 1.0, 2.0 * surs1, 3.0 * surs2, 4.0 * surs3, 5.0 * surs4;
+  //   // surbeta2 << 0.0, 0.0, 2.0, 6.0 * surs1, 12.0 * surs2, 20.0 * surs3;
+  //   // surround_p = coef.transpose() * surbeta0;
+  //   // surround_v = coef.transpose() * surbeta1;
+  //   // surround_a = coef.transpose() * surbeta2;
+
+  // }
+  // else
+  // {
+  //   double exceed_time = pt_time - surround_trajs_->at(sur_id).duration;
+  //   surround_a = surround_trajs_->at(sur_id).traj.getddSigma(surround_trajs_->at(sur_id).duration);
+  //   surround_v = surround_trajs_->at(sur_id).traj.getdSigma(surround_trajs_->at(sur_id).duration) +
+  //                 exceed_time * surround_a;
+  //   surround_p = surround_trajs_->at(sur_id).traj.getPos(surround_trajs_->at(sur_id).duration) +
+  //                 exceed_time * surround_trajs_->at(sur_id).traj.getdSigma(surround_trajs_->at(sur_id).duration) + 
+  //                 0.5 * surround_a * exceed_time * exceed_time;
+  //   //surround_a may be set as 0 problem?
+  //   ROS_ERROR("ASDASDASDASDASDA");
+  // }
+
+  // temp_sur0 = surround_v.norm();
+  // if (temp_sur0 != 0.0)
+  // {
+  //   temp_sur_reci0 = 1.0 / temp_sur0;
+  // }
+  // else
+  // {
+  //   temp_sur_reci0 = 0.0;
+  //   ROS_ERROR("2222222222222222222222222222222222222222222222222222222");
+  // }
   
 
-  // res_t += delta;
-
-  // c.row(0)[0] = c.row(0)[0]+delta;
-  //grad gradprevt
 
 
-  double s1,s2,s3,s4,s5;
-  Eigen::Matrix<double, 6, 1> beta0, beta1,beta2;
-  s1 = res_t ;
-  s2 = s1 * s1;
-  s3 = s2 * s1;
-  s4 = s2 * s2;
-  s5 = s4 * s1;
-  beta0 << 1.0, s1, s2, s3, s4, s5;
-  beta1 << 0.0, 1.0, 2.0 * s1, 3.0 * s2, 4.0 * s3, 5.0 * s4;
-  beta2 << 0.0, 0.0, 2.0, 6.0 * s1, 12.0 * s2, 20.0 * s3;
-  sigma = c.transpose() * beta0;
-  dsigma = c.transpose() * beta1;
-  ddsigma = c.transpose() * beta2;
+
+  // temp_sur1 = double(surround_v.transpose() * surround_p) * temp_sur_reci0;
+  // temp_sur2 = double(surround_v.transpose() * B_h * surround_p) * temp_sur_reci0;
+  // temp_sur3 = double(surround_a.transpose() * surround_v) * (temp_sur_reci0 * temp_sur_reci0);
+
+  // surround_R << surround_v(0), -surround_v(1),
+  //     surround_v(1), surround_v(0);
+  // surround_R = surround_R * temp_sur_reci0;
+  // help_surround_R << surround_a(0),-surround_a(1),
+  //                     surround_a(1),surround_a(0);
+  // help_surround_R = help_surround_R * temp_sur_reci0;
+
+  // //  ==========the help intermediate variables.
+
+  // // ===========the help intermediate variables.
+  // Eigen::Vector4d dtemp1;
+  // Eigen::VectorXd sdis; sdis.resize(8);
+  // for (unsigned int i = 0; i < 4; i++)
+  // {
+  //   Eigen::Vector2d lz = lz_set_.at(i);
+  //   lz(0) += singul_ * veh_param_.d_cr();
+
+  //   temp_point = sigma + ego_R * lz;
+  //   ego_signed_dists1(i) = double(surround_v.transpose() * temp_point) * temp_sur_reci0; // cr0 
+  //   ego_signed_dists2(i) = double(-surround_v.transpose() * temp_point) * temp_sur_reci0; //cr1
+  //   ego_signed_dists3(i) = double(surround_v.transpose() * B_h * temp_point) * temp_sur_reci0; //cr3
+  //   ego_signed_dists4(i) = double(-surround_v.transpose() * B_h * temp_point) * temp_sur_reci0; //cr2
+  //   ego_bound_points.col(i) = temp_point; // 2*1
+
+  //   temp_point = surround_p + surround_R * lz;
+  //   surround_signed_dists1(i) = double(dsigma.transpose() * temp_point) * temp0_reci; // cr0
+  //   dtemp1[i] = surround_signed_dists1(i);
+  //   surround_signed_dists2(i) = double(-dsigma.transpose() * temp_point) * temp0_reci; //cr1
+  //   surround_signed_dists3(i) = double(dsigma.transpose() * B_h * temp_point) * temp0_reci; //cr3
+  //   surround_signed_dists4(i) = double(-dsigma.transpose() * B_h * temp_point) * temp0_reci; //cr2
+  //   surround_bound_points.col(i) = temp_point;
+  // }
+
+  // // d1_ego - d4_ego
+  // signed_dists(0) = log_sum_exp(-alpha, surround_signed_dists1, surround_exp_sum1) - temp1 - veh_param_.d_cr() - veh_param_.length() / 2.0;
+  // signed_dists(1) = log_sum_exp(-alpha, surround_signed_dists2, surround_exp_sum2) + temp1 + veh_param_.d_cr() - veh_param_.length() / 2.0;
+  // signed_dists(2) = log_sum_exp(-alpha, surround_signed_dists3, surround_exp_sum3) - temp2 - veh_param_.width() / 2.0;
+  // signed_dists(3) = log_sum_exp(-alpha, surround_signed_dists4, surround_exp_sum4) + temp2 - veh_param_.width() / 2.0;
+
+  // // d1_sur = d4_sur
+  // signed_dists(4) = log_sum_exp(-alpha, ego_signed_dists1, ego_exp_sum1) - temp_sur1 - veh_param_.d_cr() - veh_param_.length() / 2.0;
+  // signed_dists(5) = log_sum_exp(-alpha, ego_signed_dists2, ego_exp_sum2) + temp_sur1 + veh_param_.d_cr() - veh_param_.length() / 2.0;
+  // signed_dists(6) = log_sum_exp(-alpha, ego_signed_dists3, ego_exp_sum3) - temp_sur2 - veh_param_.width() / 2.0;
+  // signed_dists(7) = log_sum_exp(-alpha, ego_signed_dists4, ego_exp_sum4) + temp_sur2 - veh_param_.width() / 2.0;
+  // // ------------------------------- add cost
+  // for(int i = 0;i<8;i++)
+  //   sdis(i) = signed_dists(i);
+  
+  // // std::cout<<"t: "<<t<<" put: "<<pt_time<<std::endl;
+  // // std::cout<<"sigma: "<<sigma.transpose()<<" dsigma: "<<dsigma.transpose()<<std::endl;
+  // // std::cout<<"surp: "<<surround_p.transpose()<<" surv: "<<surround_v.transpose()<<std::endl;
+  // // std::cout<<"yaw: "<<atan2(dsigma[1],dsigma[0])<<" pyaw: "<<atan2(surround_v[1],surround_v[0])<<std::endl;
+  // // std::cout<<"signedis: "<<signed_dists.transpose()<<std::endl;
+
+
+
+
+  // Eigen::Vector4d at;
+  // at << - temp_sur1 - veh_param_.d_cr() - veh_param_.length() / 2.0,
+  //       + temp_sur1 + veh_param_.d_cr() - veh_param_.length() / 2.0,
+  //       - temp_sur2 - veh_param_.width() / 2.0 ,+ temp_sur2 - veh_param_.width() / 2.0;
+
+
+  // double d_value1 = d_min -log_sum_exp(alpha, signed_dists, exp_sum);
+  // double pena1,penaD1;
+  // positiveSmoothedL1(d_value1,pena1,penaD1);
+  // double f1 = omg * step * wei_surround_ * pena1;
+  // //3,2
+
+  // double delta = 1.0e-9;
+  
+  // // t = 0.0;
+  // // res_t = 0.0;
+  // // // //i j 
+  // // for(int id1 = 0; id1 < i; id1++){
+  // //   t += jerkOpt_container[trajid].get_T1()(id1);
+  // // }
+  // // res_t = j * (jerkOpt_container[trajid].get_T1()(i)+delta) / K;
+  // // t += res_t;
+  // // step = (jerkOpt_container[trajid].get_T1()(i)+delta) / K;
+
+  // t+=delta;
+  
+
+  // // res_t += delta;
+
+  // // c.row(0)[0] = c.row(0)[0]+delta;
+  // //grad gradprevt
+
+
+  // double s1,s2,s3,s4,s5;
+  // Eigen::Matrix<double, 6, 1> beta0, beta1,beta2;
+  // s1 = res_t ;
+  // s2 = s1 * s1;
+  // s3 = s2 * s1;
+  // s4 = s2 * s2;
+  // s5 = s4 * s1;
+  // beta0 << 1.0, s1, s2, s3, s4, s5;
+  // beta1 << 0.0, 1.0, 2.0 * s1, 3.0 * s2, 4.0 * s3, 5.0 * s4;
+  // beta2 << 0.0, 0.0, 2.0, 6.0 * s1, 12.0 * s2, 20.0 * s3;
+  // sigma = c.transpose() * beta0;
+  // dsigma = c.transpose() * beta1;
+  // ddsigma = c.transpose() * beta2;
    
 
 
-  double last_pt_time = pt_time;
-  pt_time= offsettime + t;
+  // double last_pt_time = pt_time;
+  // pt_time= offsettime + t;
 
 
 
-  Eigen::Vector4d dtemp2;
-  Eigen::VectorXd deltasdis; deltasdis.resize(8);
-  z_h0 = 1.0/dsigma.norm();
-  ego_R << dsigma(0), -dsigma(1),
-            dsigma(1),  dsigma(0);
-  ego_R = ego_R * z_h0;
-  help_R << ddsigma(0), -ddsigma(1),
-            ddsigma(1),  ddsigma(0);
-  help_R = help_R * z_h0;
-  temp0 = dsigma.norm(); //  ||dsigma||_2
+  // Eigen::Vector4d dtemp2;
+  // Eigen::VectorXd deltasdis; deltasdis.resize(8);
+  // z_h0 = 1.0/dsigma.norm();
+  // ego_R << dsigma(0), -dsigma(1),
+  //           dsigma(1),  dsigma(0);
+  // ego_R = ego_R * z_h0;
+  // help_R << ddsigma(0), -ddsigma(1),
+  //           ddsigma(1),  ddsigma(0);
+  // help_R = help_R * z_h0;
+  // temp0 = dsigma.norm(); //  ||dsigma||_2
   
-  if (temp0 != 0.0){
-    temp0_reci = 1.0 / temp0;
-  }else{
-    temp0_reci = 0.0;
-    ROS_ERROR("1111111111111111111111111111111111111111111111111111");
-  }
-  temp1 = double(dsigma.transpose() * sigma) * temp0_reci; //(dsigma.transpose() * sigma) / temp0_reci; // dsigma^T * sigma /  ||dsigma||_2
-  temp2 = double(dsigma.transpose() * B_h * sigma) * temp0_reci;
-  temp3 = temp0_reci * temp0_reci; // ||dsigma||_2^2
-  temp4 = temp3 * temp0_reci; // ||dsigma||_2^3
-  temp5 = double(ddsigma.transpose() * dsigma) * temp3;
-  temp6 = -(temp0 + double(ddsigma.transpose() * sigma) * temp0_reci - temp5 * temp1);
-  temp7 = -(double(ddsigma.transpose() * B_h * sigma) * temp0_reci - temp5 * temp2);
-  temp_vec1 = -(sigma * temp0_reci - temp1 * temp3 * dsigma);
-  temp_vec2 = -(B_h * sigma * temp0_reci - temp2 * temp3 * dsigma);
+  // if (temp0 != 0.0){
+  //   temp0_reci = 1.0 / temp0;
+  // }else{
+  //   temp0_reci = 0.0;
+  //   ROS_ERROR("1111111111111111111111111111111111111111111111111111");
+  // }
+  // temp1 = double(dsigma.transpose() * sigma) * temp0_reci; //(dsigma.transpose() * sigma) / temp0_reci; // dsigma^T * sigma /  ||dsigma||_2
+  // temp2 = double(dsigma.transpose() * B_h * sigma) * temp0_reci;
+  // temp3 = temp0_reci * temp0_reci; // ||dsigma||_2^2
+  // temp4 = temp3 * temp0_reci; // ||dsigma||_2^3
+  // temp5 = double(ddsigma.transpose() * dsigma) * temp3;
+  // temp6 = -(temp0 + double(ddsigma.transpose() * sigma) * temp0_reci - temp5 * temp1);
+  // temp7 = -(double(ddsigma.transpose() * B_h * sigma) * temp0_reci - temp5 * temp2);
+  // temp_vec1 = -(sigma * temp0_reci - temp1 * temp3 * dsigma);
+  // temp_vec2 = -(B_h * sigma * temp0_reci - temp2 * temp3 * dsigma);
 
 
-  Eigen::Vector2d oldpu,oldvu,oldau;
-  oldpu = surround_p; oldvu = surround_v; oldau = surround_a;
+  // Eigen::Vector2d oldpu,oldvu,oldau;
+  // oldpu = surround_p; oldvu = surround_v; oldau = surround_a;
 
 
-  if (pt_time < surround_trajs_->at(sur_id).duration)
-  {
-    surround_p = surround_trajs_->at(sur_id).traj.getPos(pt_time);
-    surround_v = surround_trajs_->at(sur_id).traj.getdSigma(pt_time);
-    surround_a = surround_trajs_->at(sur_id).traj.getddSigma(pt_time);
-    // surround_trajs_->at(sur_id).traj.locatePieceIdx(pt_time-traj_i_satrt_time);
-    // double tmptime = pt_time-traj_i_satrt_time;
-    // int idx = surround_trajs_->at(sur_id).traj.locatePieceIdx(tmptime);
-    // Eigen::Matrix<double, 6, 2> coef= surround_trajs_->at(sur_id).traj[idx].getCoeffMat().transpose();
-    // double surs1,surs2,surs3,surs4,surs5;
-    // Eigen::Matrix<double, 6, 1> surbeta0, surbeta1,surbeta2;
-    // surs1 = tmptime ;
-    // surs2 = surs1 * surs1;
-    // surs3 = surs2 * surs1;
-    // surs4 = surs2 * surs2;
-    // surs5 = surs4 * surs1;
-    // surbeta0 << 1.0, surs1, surs2, surs3, surs4, surs5;
-    // surbeta1 << 0.0, 1.0, 2.0 * surs1, 3.0 * surs2, 4.0 * surs3, 5.0 * surs4;
-    // surbeta2 << 0.0, 0.0, 2.0, 6.0 * surs1, 12.0 * surs2, 20.0 * surs3;
-    // surround_p = coef.transpose() * surbeta0;
-    // surround_v = coef.transpose() * surbeta1;
-    // surround_a = coef.transpose() * surbeta2;
+  // if (pt_time < surround_trajs_->at(sur_id).duration)
+  // {
+  //   surround_p = surround_trajs_->at(sur_id).traj.getPos(pt_time);
+  //   surround_v = surround_trajs_->at(sur_id).traj.getdSigma(pt_time);
+  //   surround_a = surround_trajs_->at(sur_id).traj.getddSigma(pt_time);
+  //   // surround_trajs_->at(sur_id).traj.locatePieceIdx(pt_time-traj_i_satrt_time);
+  //   // double tmptime = pt_time-traj_i_satrt_time;
+  //   // int idx = surround_trajs_->at(sur_id).traj.locatePieceIdx(tmptime);
+  //   // Eigen::Matrix<double, 6, 2> coef= surround_trajs_->at(sur_id).traj[idx].getCoeffMat().transpose();
+  //   // double surs1,surs2,surs3,surs4,surs5;
+  //   // Eigen::Matrix<double, 6, 1> surbeta0, surbeta1,surbeta2;
+  //   // surs1 = tmptime ;
+  //   // surs2 = surs1 * surs1;
+  //   // surs3 = surs2 * surs1;
+  //   // surs4 = surs2 * surs2;
+  //   // surs5 = surs4 * surs1;
+  //   // surbeta0 << 1.0, surs1, surs2, surs3, surs4, surs5;
+  //   // surbeta1 << 0.0, 1.0, 2.0 * surs1, 3.0 * surs2, 4.0 * surs3, 5.0 * surs4;
+  //   // surbeta2 << 0.0, 0.0, 2.0, 6.0 * surs1, 12.0 * surs2, 20.0 * surs3;
+  //   // surround_p = coef.transpose() * surbeta0;
+  //   // surround_v = coef.transpose() * surbeta1;
+  //   // surround_a = coef.transpose() * surbeta2;
 
-    // Eigen::Matrix<>->at(sur_id).traj[idx].getCoeffMat()
-  }
-  else
-  {
-    double exceed_time = pt_time - surround_trajs_->at(sur_id).duration;
-    surround_a = surround_trajs_->at(sur_id).traj.getddSigma(surround_trajs_->at(sur_id).duration);
-    surround_v = surround_trajs_->at(sur_id).traj.getdSigma(surround_trajs_->at(sur_id).duration) +
-                  exceed_time * surround_a;
-    surround_p = surround_trajs_->at(sur_id).traj.getPos(surround_trajs_->at(sur_id).duration) +
-                  exceed_time * surround_trajs_->at(sur_id).traj.getdSigma(surround_trajs_->at(sur_id).duration) + 
-                  0.5 * surround_a * exceed_time * exceed_time;
-    ROS_ERROR("33333333333333333333333333333333");
-    //surround_a may be set as 0 problem?
+  //   // Eigen::Matrix<>->at(sur_id).traj[idx].getCoeffMat()
+  // }
+  // else
+  // {
+  //   double exceed_time = pt_time - surround_trajs_->at(sur_id).duration;
+  //   surround_a = surround_trajs_->at(sur_id).traj.getddSigma(surround_trajs_->at(sur_id).duration);
+  //   surround_v = surround_trajs_->at(sur_id).traj.getdSigma(surround_trajs_->at(sur_id).duration) +
+  //                 exceed_time * surround_a;
+  //   surround_p = surround_trajs_->at(sur_id).traj.getPos(surround_trajs_->at(sur_id).duration) +
+  //                 exceed_time * surround_trajs_->at(sur_id).traj.getdSigma(surround_trajs_->at(sur_id).duration) + 
+  //                 0.5 * surround_a * exceed_time * exceed_time;
+  //   ROS_ERROR("33333333333333333333333333333333");
+  //   //surround_a may be set as 0 problem?
     
-  }
-  // std::cout<<"last: "<<last_pt_time<<" now pttime: "<<pt_time<<std::endl;
-  // std::cout<<"surp: "<<surround_p.transpose()<<" surv: "<<surround_v.transpose()<<" sura: "<<surround_a.transpose()<<std::endl;
-  // std::cout<<"surpu-oldpu: "<<(surround_p-oldpu).transpose()/delta<<" survu-oldvu: "<<(surround_v-oldvu).transpose()/delta<<std::endl;
+  // }
+  // // std::cout<<"last: "<<last_pt_time<<" now pttime: "<<pt_time<<std::endl;
+  // // std::cout<<"surp: "<<surround_p.transpose()<<" surv: "<<surround_v.transpose()<<" sura: "<<surround_a.transpose()<<std::endl;
+  // // std::cout<<"surpu-oldpu: "<<(surround_p-oldpu).transpose()/delta<<" survu-oldvu: "<<(surround_v-oldvu).transpose()/delta<<std::endl;
 
 
 
 
-  temp_sur0 = surround_v.norm();
-  if (temp_sur0 != 0.0)
-  {
-    temp_sur_reci0 = 1.0 / temp_sur0;
-  }
-  else
-  {
-    temp_sur_reci0 = 0.0;
-    ROS_ERROR("2222222222222222222222222222222222222222222222222222222");
-  }
-
-  temp_sur1 = double(surround_v.transpose() * surround_p) * temp_sur_reci0;
-  temp_sur2 = double(surround_v.transpose() * B_h * surround_p) * temp_sur_reci0;
-  //double(dsigma.transpose() * B_h * sigma) * temp0_reci;
-  temp_sur3 = double(surround_a.transpose() * surround_v) * (temp_sur_reci0 * temp_sur_reci0);
-
-  surround_R << surround_v(0), -surround_v(1),
-                surround_v(1), surround_v(0);
-  surround_R = surround_R * temp_sur_reci0;
-  help_surround_R << surround_a(0),-surround_a(1),
-                     surround_a(1),surround_a(0);
-  help_surround_R = help_surround_R * temp_sur_reci0;
-
-  //  ==========the help intermediate variables.
-
-  // ===========the help intermediate variables.
-
-  for (unsigned int i = 0; i < 4; i++)
-  {
-    Eigen::Vector2d lz = lz_set_.at(i);
-    lz(0) += singul_ * veh_param_.d_cr();
-
-    temp_point = sigma + ego_R * lz;
-    ego_signed_dists1(i) = double(surround_v.transpose() * temp_point) * temp_sur_reci0; // cr0 
-    ego_signed_dists2(i) = double(-surround_v.transpose() * temp_point) * temp_sur_reci0; //cr1
-    ego_signed_dists3(i) = double(surround_v.transpose() * B_h * temp_point) * temp_sur_reci0; //cr3
-    ego_signed_dists4(i) = double(-surround_v.transpose() * B_h * temp_point) * temp_sur_reci0; //cr2
-    ego_bound_points.col(i) = temp_point; // 2*1
-
-    temp_point = surround_p + surround_R * lz;
-    surround_signed_dists1(i) = double(dsigma.transpose() * temp_point) * temp0_reci; // cr0
-    dtemp2[i] = surround_signed_dists1(i);
-    surround_signed_dists2(i) = double(-dsigma.transpose() * temp_point) * temp0_reci; //cr1
-    surround_signed_dists3(i) = double(dsigma.transpose() * B_h * temp_point) * temp0_reci; //cr3
-    surround_signed_dists4(i) = double(-dsigma.transpose() * B_h * temp_point) * temp0_reci; //cr2
-    surround_bound_points.col(i) = temp_point;
-  }
-
-  // d1_ego - d4_ego
-  signed_dists(0) = log_sum_exp(-alpha, surround_signed_dists1, surround_exp_sum1) - temp1 - veh_param_.d_cr() - veh_param_.length() / 2.0;
-  signed_dists(1) = log_sum_exp(-alpha, surround_signed_dists2, surround_exp_sum2) + temp1 + veh_param_.d_cr() - veh_param_.length() / 2.0;
-  signed_dists(2) = log_sum_exp(-alpha, surround_signed_dists3, surround_exp_sum3) - temp2 - veh_param_.width() / 2.0;
-  signed_dists(3) = log_sum_exp(-alpha, surround_signed_dists4, surround_exp_sum4) + temp2 - veh_param_.width() / 2.0;
-
-  // d1_sur = d4_sur
-  //double(dsigma.transpose() * B_h * sigma) * temp0_reci;
-  signed_dists(4) = log_sum_exp(-alpha, ego_signed_dists1, ego_exp_sum1) - temp_sur1 - veh_param_.d_cr() - veh_param_.length() / 2.0;
-  signed_dists(5) = log_sum_exp(-alpha, ego_signed_dists2, ego_exp_sum2) + temp_sur1 + veh_param_.d_cr() - veh_param_.length() / 2.0;
-  signed_dists(6) = log_sum_exp(-alpha, ego_signed_dists3, ego_exp_sum3) - temp_sur2 - veh_param_.width() / 2.0;
-  signed_dists(7) = log_sum_exp(-alpha, ego_signed_dists4, ego_exp_sum4) + temp_sur2 - veh_param_.width() / 2.0;
-  // ------------------------------- add cost
-  Eigen::Vector4d at2;
-  at2 << - temp_sur1 - veh_param_.d_cr() - veh_param_.length() / 2.0,
-        + temp_sur1 + veh_param_.d_cr() - veh_param_.length() / 2.0,
-        - temp_sur2 - veh_param_.width() / 2.0 ,+ temp_sur2 - veh_param_.width() / 2.0;
-  for(int i =0 ;i<8; i++)
-    deltasdis(i) = signed_dists(i);
-  double d_value2 = d_min -log_sum_exp(alpha, signed_dists, exp_sum);
-  // for(int i =0 ;i<4;i++){
-  //   std::cout<<"approxgrad_sd_dsigma.c: "<<(dtemp2-dtemp1)[i]/delta<<std::endl;
+  // temp_sur0 = surround_v.norm();
+  // if (temp_sur0 != 0.0)
+  // {
+  //   temp_sur_reci0 = 1.0 / temp_sur0;
+  // }
+  // else
+  // {
+  //   temp_sur_reci0 = 0.0;
+  //   ROS_ERROR("2222222222222222222222222222222222222222222222222222222");
   // }
 
-  // std::cout<<"approx surdis: "<<(deltasdis-sdis).transpose()/delta<<std::endl;
+  // temp_sur1 = double(surround_v.transpose() * surround_p) * temp_sur_reci0;
+  // temp_sur2 = double(surround_v.transpose() * B_h * surround_p) * temp_sur_reci0;
+  // //double(dsigma.transpose() * B_h * sigma) * temp0_reci;
+  // temp_sur3 = double(surround_a.transpose() * surround_v) * (temp_sur_reci0 * temp_sur_reci0);
 
-  //std::cout<<"dsigma.col(0): "<<(temp_point * temp0_reci - double(dsigma.transpose() * temp_point) * temp4 * dsigma)<<std::endl;
-  double pena2,penaD2;
-  positiveSmoothedL1(d_value2,pena2,penaD2);
-  double f2 = omg * step * wei_surround_ * pena2;
+  // surround_R << surround_v(0), -surround_v(1),
+  //               surround_v(1), surround_v(0);
+  // surround_R = surround_R * temp_sur_reci0;
+  // help_surround_R << surround_a(0),-surround_a(1),
+  //                    surround_a(1),surround_a(0);
+  // help_surround_R = help_surround_R * temp_sur_reci0;
+
+  // //  ==========the help intermediate variables.
+
+  // // ===========the help intermediate variables.
+
+  // for (unsigned int i = 0; i < 4; i++)
+  // {
+  //   Eigen::Vector2d lz = lz_set_.at(i);
+  //   lz(0) += singul_ * veh_param_.d_cr();
+
+  //   temp_point = sigma + ego_R * lz;
+  //   ego_signed_dists1(i) = double(surround_v.transpose() * temp_point) * temp_sur_reci0; // cr0 
+  //   ego_signed_dists2(i) = double(-surround_v.transpose() * temp_point) * temp_sur_reci0; //cr1
+  //   ego_signed_dists3(i) = double(surround_v.transpose() * B_h * temp_point) * temp_sur_reci0; //cr3
+  //   ego_signed_dists4(i) = double(-surround_v.transpose() * B_h * temp_point) * temp_sur_reci0; //cr2
+  //   ego_bound_points.col(i) = temp_point; // 2*1
+
+  //   temp_point = surround_p + surround_R * lz;
+  //   surround_signed_dists1(i) = double(dsigma.transpose() * temp_point) * temp0_reci; // cr0
+  //   dtemp2[i] = surround_signed_dists1(i);
+  //   surround_signed_dists2(i) = double(-dsigma.transpose() * temp_point) * temp0_reci; //cr1
+  //   surround_signed_dists3(i) = double(dsigma.transpose() * B_h * temp_point) * temp0_reci; //cr3
+  //   surround_signed_dists4(i) = double(-dsigma.transpose() * B_h * temp_point) * temp0_reci; //cr2
+  //   surround_bound_points.col(i) = temp_point;
+  // }
+
+  // // d1_ego - d4_ego
+  // signed_dists(0) = log_sum_exp(-alpha, surround_signed_dists1, surround_exp_sum1) - temp1 - veh_param_.d_cr() - veh_param_.length() / 2.0;
+  // signed_dists(1) = log_sum_exp(-alpha, surround_signed_dists2, surround_exp_sum2) + temp1 + veh_param_.d_cr() - veh_param_.length() / 2.0;
+  // signed_dists(2) = log_sum_exp(-alpha, surround_signed_dists3, surround_exp_sum3) - temp2 - veh_param_.width() / 2.0;
+  // signed_dists(3) = log_sum_exp(-alpha, surround_signed_dists4, surround_exp_sum4) + temp2 - veh_param_.width() / 2.0;
+
+  // // d1_sur = d4_sur
+  // //double(dsigma.transpose() * B_h * sigma) * temp0_reci;
+  // signed_dists(4) = log_sum_exp(-alpha, ego_signed_dists1, ego_exp_sum1) - temp_sur1 - veh_param_.d_cr() - veh_param_.length() / 2.0;
+  // signed_dists(5) = log_sum_exp(-alpha, ego_signed_dists2, ego_exp_sum2) + temp_sur1 + veh_param_.d_cr() - veh_param_.length() / 2.0;
+  // signed_dists(6) = log_sum_exp(-alpha, ego_signed_dists3, ego_exp_sum3) - temp_sur2 - veh_param_.width() / 2.0;
+  // signed_dists(7) = log_sum_exp(-alpha, ego_signed_dists4, ego_exp_sum4) + temp_sur2 - veh_param_.width() / 2.0;
+  // // ------------------------------- add cost
+  // Eigen::Vector4d at2;
+  // at2 << - temp_sur1 - veh_param_.d_cr() - veh_param_.length() / 2.0,
+  //       + temp_sur1 + veh_param_.d_cr() - veh_param_.length() / 2.0,
+  //       - temp_sur2 - veh_param_.width() / 2.0 ,+ temp_sur2 - veh_param_.width() / 2.0;
+  // for(int i =0 ;i<8; i++)
+  //   deltasdis(i) = signed_dists(i);
+  // double d_value2 = d_min -log_sum_exp(alpha, signed_dists, exp_sum);
+  // // for(int i =0 ;i<4;i++){
+  // //   std::cout<<"approxgrad_sd_dsigma.c: "<<(dtemp2-dtemp1)[i]/delta<<std::endl;
+  // // }
+
+  // // std::cout<<"approx surdis: "<<(deltasdis-sdis).transpose()/delta<<std::endl;
+
+  // //std::cout<<"dsigma.col(0): "<<(temp_point * temp0_reci - double(dsigma.transpose() * temp_point) * temp4 * dsigma)<<std::endl;
+  // double pena2,penaD2;
+  // positiveSmoothedL1(d_value2,pena2,penaD2);
+  // double f2 = omg * step * wei_surround_ * pena2;
   
+  // // std::cout<<"L1norm approx grad: "<<(f2-f1) / delta<<std::endl;
+  // // std::cout<<"new costp2: "<<d_value2<<std::endl;
+  // // return (f2-f1) / delta;
+  // // std::cout<<"approx grad: "<<(d_value2-d_value1)/delta<<std::endl;
   // std::cout<<"L1norm approx grad: "<<(f2-f1) / delta<<std::endl;
-  // std::cout<<"new costp2: "<<d_value2<<std::endl;
-  // return (f2-f1) / delta;
-  // std::cout<<"approx grad: "<<(d_value2-d_value1)/delta<<std::endl;
-  std::cout<<"L1norm approx grad: "<<(f2-f1) / delta<<std::endl;
-  return (d_value2-d_value1) / delta;
+  // return (d_value2-d_value1) / delta;
 
 
 
@@ -1327,361 +1269,362 @@ double PolyTrajOptimizer::debugGradCheck(const int i_dp, // index of constraint 
   {
     
 
-    int singul_ = singul_container[trajid];
-    int sur_singul = 1; //moving obstacles always move forward
-    if (surround_trajs_==NULL||surround_trajs_->size() < 1) return 0.0;
-    //t means the cur-t of the constraint point
-    Eigen::Matrix<double, 6, 2> gradViolaPc;
-    double gradViolaPt;
+    // int singul_ = singul_container[trajid];
+    // int sur_singul = 1; //moving obstacles always move forward
+    // if (surround_trajs_==NULL||surround_trajs_->size() < 1) return 0.0;
+    // //t means the cur-t of the constraint point
+    // Eigen::Matrix<double, 6, 2> gradViolaPc;
+    // double gradViolaPt;
 
-    double alpha = 100.0, d_min = surround_clearance_ + std::log(8.0) / alpha; // may have problems hzc
-    // only counts when the distance is smaller than clearance
+    // double alpha = 100.0, d_min = surround_clearance_ + std::log(8.0) / alpha; // may have problems hzc
+    // // only counts when the distance is smaller than clearance
 
-    double temp0 = dsigma.norm(); //  ||dsigma||_2
-    double temp0_reci;
-    if (temp0 != 0.0){
-      temp0_reci = 1.0 / temp0;
-    }else{
-      temp0_reci = 0.0;
-      ROS_ERROR("temp0_reci");
-    }
+    // double temp0 = dsigma.norm(); //  ||dsigma||_2
+    // double temp0_reci;
+    // if (temp0 != 0.0){
+    //   temp0_reci = 1.0 / temp0;
+    // }else{
+    //   temp0_reci = 0.0;
+    //   ROS_ERROR("temp0_reci");
+    // }
 
-    double temp3 = temp0_reci * temp0_reci; // ||dsigma||_2^2
+    // double temp3 = temp0_reci * temp0_reci; // ||dsigma||_2^2
 
-    /*-------------prerequiste------------------*/
-    int number_of_hyperplanes_of_ego_car = number_of_hyperplanes_of_ego_car_;
-    int number_of_hyperplanes_of_surround_car = number_of_hyperplanes_of_surround_car_;
-    std::vector<Eigen::Vector2d> vec_le = vec_le_;
-    std::vector<Eigen::Vector2d> vec_lo = vec_lo_;
-    /*------------------------------------------*/
+    // /*-------------prerequiste------------------*/
+    // int number_of_hyperplanes_of_ego_car = number_of_hyperplanes_of_ego_car_;
+    // int number_of_hyperplanes_of_surround_car = number_of_hyperplanes_of_surround_car_;
+    // std::vector<Eigen::Vector2d> vec_le = vec_le_;
+    // std::vector<Eigen::Vector2d> vec_lo = vec_lo_;
+    // /*------------------------------------------*/
 
-    Eigen::Vector2d gradp,gradp2;
-    double gradt,grad_prev_t;
-    double totalPenalty = 0.0;
-    double costp,violaDynamicObsPena,violaDynamicObsPenaD;
+    // Eigen::Vector2d gradp,gradp2;
+    // double gradt,grad_prev_t;
+    // double totalPenalty = 0.0;
+    // double costp,violaDynamicObsPena,violaDynamicObsPenaD;
 
-    for (size_t sur_id = 0; sur_id < surround_trajs_->size(); sur_id++){
-      gradp.setZero();
-      gradp2.setZero();
-      gradt = 0;
-      grad_prev_t = 0;
-      double traj_i_satrt_time = surround_trajs_->at(sur_id).start_time;
-      double offsettime = t_now_ - traj_i_satrt_time + trajtime;
-      double pt_time = offsettime + t;
+    // for (size_t sur_id = 0; sur_id < surround_trajs_->size(); sur_id++){
+    //   gradp.setZero();
+    //   gradp2.setZero();
+    //   gradt = 0;
+    //   grad_prev_t = 0;
+    //   double traj_i_satrt_time = surround_trajs_->at(sur_id).start_time;
+    //   double offsettime = t_now_ - traj_i_satrt_time + trajtime;
+    //   double pt_time = offsettime + t;
     
-      Eigen::Vector2d surround_p, surround_v, surround_a;
-      if (pt_time < surround_trajs_->at(sur_id).duration)
-      {
+    //   Eigen::Vector2d surround_p, surround_v, surround_a;
+    //   if (pt_time < surround_trajs_->at(sur_id).duration)
+    //   {
         
-        surround_p = surround_trajs_->at(sur_id).traj.getPos(pt_time);
-        surround_v = surround_trajs_->at(sur_id).traj.getdSigma(pt_time);
-        surround_a = surround_trajs_->at(sur_id).traj.getddSigma(pt_time);
-      }
-      else
-      {
-        surround_a = surround_trajs_->at(sur_id).traj.getddSigma(surround_trajs_->at(sur_id).duration);
-        double exceed_time = pt_time - surround_trajs_->at(sur_id).duration;
-        surround_v = surround_trajs_->at(sur_id).traj.getdSigma(surround_trajs_->at(sur_id).duration) +
-                      exceed_time * surround_a;
-        surround_p = surround_trajs_->at(sur_id).traj.getPos(surround_trajs_->at(sur_id).duration) +
-                      exceed_time * surround_trajs_->at(sur_id).traj.getdSigma(surround_trajs_->at(sur_id).duration) + 
-                      0.5 * surround_a * exceed_time * exceed_time;
-        //surround_a may be set as 0 problem?
-      }
+    //     surround_p = surround_trajs_->at(sur_id).traj.getPos(pt_time);
+    //     surround_v = surround_trajs_->at(sur_id).traj.getdSigma(pt_time);
+    //     surround_a = surround_trajs_->at(sur_id).traj.getddSigma(pt_time);
+    //   }
+    //   else
+    //   {
+    //     surround_a = surround_trajs_->at(sur_id).traj.getddSigma(surround_trajs_->at(sur_id).duration);
+    //     double exceed_time = pt_time - surround_trajs_->at(sur_id).duration;
+    //     surround_v = surround_trajs_->at(sur_id).traj.getdSigma(surround_trajs_->at(sur_id).duration) +
+    //                   exceed_time * surround_a;
+    //     surround_p = surround_trajs_->at(sur_id).traj.getPos(surround_trajs_->at(sur_id).duration) +
+    //                   exceed_time * surround_trajs_->at(sur_id).traj.getdSigma(surround_trajs_->at(sur_id).duration) + 
+    //                   0.5 * surround_a * exceed_time * exceed_time;
+    //     //surround_a may be set as 0 problem?
+    //   }
 
 
 
-      if((surround_p-sigma).norm()>veh_param_.length() * 1.5){
-        continue;
-      }
+    //   if((surround_p-sigma).norm()>veh_param_.length() * 1.5){
+    //     continue;
+    //   }
 
 
-      double temp_sur0 = surround_v.norm();
-      double temp_sur_reci0;
-      if (temp_sur0 != 0.0)
-      {
+    //   double temp_sur0 = surround_v.norm();
+    //   double temp_sur_reci0;
+    //   if (temp_sur0 != 0.0)
+    //   {
         
-        temp_sur_reci0 = 1.0 / temp_sur0;
-      }
-      else
-      {
-        temp_sur_reci0 = 0.0;
-        ROS_ERROR("temp_sur_reci0 = 0.0!");
-      }
-      Eigen::Matrix2d surround_R = surround_trajs_->at(sur_id).traj.getR(pt_time);
-      Eigen::VectorXd surround2ego_sum_exp_vec(number_of_hyperplanes_of_ego_car);
-      Eigen::VectorXd d_U(number_of_hyperplanes_of_ego_car);
-      std::vector<Eigen::Vector2d> ego_normal_vectors_vec;  ego_normal_vectors_vec.clear(); // This vector is used to store the normal vectors of each hyperplane of the ego car
-      std::vector<Eigen::VectorXd> vec_d_Uo_e_vec; vec_d_Uo_e_vec.clear();
-      std::vector<Eigen::Matrix2d> F_delta_le_vec;  F_delta_le_vec.clear(); // This vector stores the F(delta_le) which is later used in the gradient calculation
-      std::vector<Eigen::Matrix2d> F_le_vec;  F_le_vec.clear(); // This vector stores the F(le) which is later used in the gradient calcualtion
-      for(int e = 0; e < number_of_hyperplanes_of_ego_car; e++)
-      {
-        Eigen::Vector2d le = vec_le[e];
-        Eigen::Vector2d delta_le = vec_le[e + 1] - vec_le[e];
+    //     temp_sur_reci0 = 1.0 / temp_sur0;
+    //   }
+    //   else
+    //   {
+    //     temp_sur_reci0 = 0.0;
+    //     ROS_ERROR("temp_sur_reci0 = 0.0!");
+    //   }
+    //   Eigen::Matrix2d surround_R = surround_trajs_->at(sur_id).traj.getR(pt_time);
+    //   Eigen::VectorXd surround2ego_sum_exp_vec(number_of_hyperplanes_of_ego_car);
+    //   Eigen::VectorXd d_U(number_of_hyperplanes_of_ego_car);
+    //   std::vector<Eigen::Vector2d> ego_normal_vectors_vec;  ego_normal_vectors_vec.clear(); // This vector is used to store the normal vectors of each hyperplane of the ego car
+    //   std::vector<Eigen::VectorXd> vec_d_Uo_e_vec; vec_d_Uo_e_vec.clear();
+    //   std::vector<Eigen::Matrix2d> F_delta_le_vec;  F_delta_le_vec.clear(); // This vector stores the F(delta_le) which is later used in the gradient calculation
+    //   std::vector<Eigen::Matrix2d> F_le_vec;  F_le_vec.clear(); // This vector stores the F(le) which is later used in the gradient calcualtion
+    //   for(int e = 0; e < number_of_hyperplanes_of_ego_car; e++)
+    //   {
+    //     Eigen::Vector2d le = vec_le[e];
+    //     Eigen::Vector2d delta_le = vec_le[e + 1] - vec_le[e];
 
-        double delta_le_norm = delta_le.norm();
-        double delta_le_norm_inverse = 1 / delta_le_norm;
+    //     double delta_le_norm = delta_le.norm();
+    //     double delta_le_norm_inverse = 1 / delta_le_norm;
 
-        /*--------------calculate F(delta_le) below-----------------*/
-        Eigen::Matrix2d temp_l_Bl;
-        temp_l_Bl << delta_le(0), -delta_le(1),  //[l, Bl] in F(l)
-                     delta_le(1), delta_le(0);
-        Eigen::Matrix2d F_delta_le = singul_ * temp_l_Bl.transpose() * temp0_reci - dsigma * (ego_R * delta_le).transpose() * temp3;
-        F_delta_le_vec.push_back(F_delta_le);
-        /*----------------------------------------------------------*/
+    //     /*--------------calculate F(delta_le) below-----------------*/
+    //     Eigen::Matrix2d temp_l_Bl;
+    //     temp_l_Bl << delta_le(0), -delta_le(1),  //[l, Bl] in F(l)
+    //                  delta_le(1), delta_le(0);
+    //     Eigen::Matrix2d F_delta_le = singul_ * temp_l_Bl.transpose() * temp0_reci - dsigma * (ego_R * delta_le).transpose() * temp3;
+    //     F_delta_le_vec.push_back(F_delta_le);
+    //     /*----------------------------------------------------------*/
 
-        /*-----------------calculate F(le) below--------------------*/
-        temp_l_Bl << le(0), -le(1),
-                     le(1), le(0);
-        Eigen::Matrix2d F_le = singul_ * temp_l_Bl.transpose() * temp0_reci - dsigma * (ego_R * le).transpose() * temp3;
-        F_le_vec.push_back(F_le);
-        /*----------------------------------------------------------*/
+    //     /*-----------------calculate F(le) below--------------------*/
+    //     temp_l_Bl << le(0), -le(1),
+    //                  le(1), le(0);
+    //     Eigen::Matrix2d F_le = singul_ * temp_l_Bl.transpose() * temp0_reci - dsigma * (ego_R * le).transpose() * temp3;
+    //     F_le_vec.push_back(F_le);
+    //     /*----------------------------------------------------------*/
 
-        Eigen::VectorXd d_Uo_e_vec(number_of_hyperplanes_of_surround_car); // vector stores the d_Uo_e in the paper which is later put into the lse function
+    //     Eigen::VectorXd d_Uo_e_vec(number_of_hyperplanes_of_surround_car); // vector stores the d_Uo_e in the paper which is later put into the lse function
 
-        Eigen::Vector2d H_tilde = B_h * ego_R * delta_le * delta_le_norm_inverse; 
-        ego_normal_vectors_vec.push_back(H_tilde);
-        double d_U_e_tilde = H_tilde.transpose() * (surround_p - sigma - ego_R * le);
+    //     Eigen::Vector2d H_tilde = B_h * ego_R * delta_le * delta_le_norm_inverse; 
+    //     ego_normal_vectors_vec.push_back(H_tilde);
+    //     double d_U_e_tilde = H_tilde.transpose() * (surround_p - sigma - ego_R * le);
 
-        for(int o = 0; o < number_of_hyperplanes_of_surround_car; o++)
-        {
-          Eigen::Vector2d lo = vec_lo[o];
-          double d_Uo_e = H_tilde.transpose() * surround_R * lo;
-          d_Uo_e_vec(o) = d_Uo_e;
-        }
+    //     for(int o = 0; o < number_of_hyperplanes_of_surround_car; o++)
+    //     {
+    //       Eigen::Vector2d lo = vec_lo[o];
+    //       double d_Uo_e = H_tilde.transpose() * surround_R * lo;
+    //       d_Uo_e_vec(o) = d_Uo_e;
+    //     }
 
-        double exp_sum_d_Uo_e;
-        double d_U_e = log_sum_exp(-alpha, d_Uo_e_vec, exp_sum_d_Uo_e) + d_U_e_tilde;
-        d_U(e) = d_U_e;
+    //     double exp_sum_d_Uo_e;
+    //     double d_U_e = log_sum_exp(-alpha, d_Uo_e_vec, exp_sum_d_Uo_e) + d_U_e_tilde;
+    //     d_U(e) = d_U_e;
 
-        vec_d_Uo_e_vec.push_back(d_Uo_e_vec);
+    //     vec_d_Uo_e_vec.push_back(d_Uo_e_vec);
 
-        // This vector stores the exp sum of the d_Uo_e, because lse' = sum(d_Uo_e / exp_sum_d_Uo_e)
-        surround2ego_sum_exp_vec(e) = exp_sum_d_Uo_e;
-      }
+    //     // This vector stores the exp sum of the d_Uo_e, because lse' = sum(d_Uo_e / exp_sum_d_Uo_e)
+    //     surround2ego_sum_exp_vec(e) = exp_sum_d_Uo_e;
+    //   }
 
 
-      Eigen::VectorXd ego2surround_sum_exp_vec(number_of_hyperplanes_of_surround_car);
-      Eigen::VectorXd d_E(number_of_hyperplanes_of_surround_car);
-      std::vector<Eigen::Vector2d> surround_normal_vectors_vec;  surround_normal_vectors_vec.clear(); // This vector is used to store the normal vectors of each hyperplane of the surround car
-      std::vector<Eigen::VectorXd> vec_d_Ee_o_vec; vec_d_Ee_o_vec.clear();
-      for(int o = 0; o < number_of_hyperplanes_of_surround_car; o++)
-      {
-        Eigen::Vector2d lo = vec_lo[o];
-        Eigen::Vector2d delta_lo = vec_lo[o + 1] - vec_lo[o];
+    //   Eigen::VectorXd ego2surround_sum_exp_vec(number_of_hyperplanes_of_surround_car);
+    //   Eigen::VectorXd d_E(number_of_hyperplanes_of_surround_car);
+    //   std::vector<Eigen::Vector2d> surround_normal_vectors_vec;  surround_normal_vectors_vec.clear(); // This vector is used to store the normal vectors of each hyperplane of the surround car
+    //   std::vector<Eigen::VectorXd> vec_d_Ee_o_vec; vec_d_Ee_o_vec.clear();
+    //   for(int o = 0; o < number_of_hyperplanes_of_surround_car; o++)
+    //   {
+    //     Eigen::Vector2d lo = vec_lo[o];
+    //     Eigen::Vector2d delta_lo = vec_lo[o + 1] - vec_lo[o];
 
-        double delta_lo_norm = delta_lo.norm();
-        double delta_lo_norm_inverse = 1 / delta_lo_norm;
+    //     double delta_lo_norm = delta_lo.norm();
+    //     double delta_lo_norm_inverse = 1 / delta_lo_norm;
 
-        Eigen::VectorXd d_Ee_o_vec(number_of_hyperplanes_of_ego_car); // vector stores the d_Ee_o in the paper which is later put into the lse function
+    //     Eigen::VectorXd d_Ee_o_vec(number_of_hyperplanes_of_ego_car); // vector stores the d_Ee_o in the paper which is later put into the lse function
 
-        Eigen::Vector2d H_tilde = B_h * surround_R * delta_lo * delta_lo_norm_inverse;
-        surround_normal_vectors_vec.push_back(H_tilde);
-        double d_E_o_tilde = H_tilde.transpose() * (sigma - surround_p - surround_R * lo);
+    //     Eigen::Vector2d H_tilde = B_h * surround_R * delta_lo * delta_lo_norm_inverse;
+    //     surround_normal_vectors_vec.push_back(H_tilde);
+    //     double d_E_o_tilde = H_tilde.transpose() * (sigma - surround_p - surround_R * lo);
 
-        for(int e = 0; e < number_of_hyperplanes_of_ego_car; e++)
-        {
-          Eigen::Vector2d le = vec_le[e];
-          double d_Ee_o = H_tilde.transpose() * ego_R * le;
-          d_Ee_o_vec(e) = d_Ee_o;
-        }
+    //     for(int e = 0; e < number_of_hyperplanes_of_ego_car; e++)
+    //     {
+    //       Eigen::Vector2d le = vec_le[e];
+    //       double d_Ee_o = H_tilde.transpose() * ego_R * le;
+    //       d_Ee_o_vec(e) = d_Ee_o;
+    //     }
         
-        double exp_sum_d_Ee_o;
-        double d_E_o = log_sum_exp(-alpha, d_Ee_o_vec, exp_sum_d_Ee_o) + d_E_o_tilde;
-        d_E(o) = d_E_o;
+    //     double exp_sum_d_Ee_o;
+    //     double d_E_o = log_sum_exp(-alpha, d_Ee_o_vec, exp_sum_d_Ee_o) + d_E_o_tilde;
+    //     d_E(o) = d_E_o;
 
-        vec_d_Ee_o_vec.push_back(d_Ee_o_vec);
+    //     vec_d_Ee_o_vec.push_back(d_Ee_o_vec);
 
-        ego2surround_sum_exp_vec(o) = exp_sum_d_Ee_o;
-      }
+    //     ego2surround_sum_exp_vec(o) = exp_sum_d_Ee_o;
+    //   }
 
-      Eigen::VectorXd d_test(number_of_hyperplanes_of_ego_car + number_of_hyperplanes_of_surround_car);
-      d_test << d_U, d_E;
+    //   Eigen::VectorXd d_test(number_of_hyperplanes_of_ego_car + number_of_hyperplanes_of_surround_car);
+    //   d_test << d_U, d_E;
 
-      double exp_sum_d = 0;
-      double d_value_test = d_min - log_sum_exp(alpha, d_test, exp_sum_d); 
-      costp = d_value_test;
+    //   double exp_sum_d = 0;
+    //   double d_value_test = d_min - log_sum_exp(alpha, d_test, exp_sum_d); 
+    //   costp = d_value_test;
 
-      if(costp <= 0) continue;
-      positiveSmoothedL1(costp, violaDynamicObsPena, violaDynamicObsPenaD);
-      // !!!!!!!!!!!!!!!!!This line is later put out!!!!!!!!!!!!!!!!
-      totalPenalty += omg * step * wei_surround_ * violaDynamicObsPena;
+    //   if(costp <= 0) continue;
+    //   positiveSmoothedL1(costp, violaDynamicObsPena, violaDynamicObsPenaD);
+    //   // !!!!!!!!!!!!!!!!!This line is later put out!!!!!!!!!!!!!!!!
+    //   totalPenalty += omg * step * wei_surround_ * violaDynamicObsPena;
 
-      /*---------------This part calculates the parital G over partial sigma-----------------*/
-      Eigen::Vector2d partial_G_over_partial_sigma(0.0, 0.0); 
-      for(int e = 0; e < number_of_hyperplanes_of_ego_car; e++)
-      {
-        Eigen::Vector2d partial_d_U_e_tilde_over_partial_sigma = - ego_normal_vectors_vec[e];
-        partial_G_over_partial_sigma -= d_test(e) / exp_sum_d * partial_d_U_e_tilde_over_partial_sigma;
-        // d_test(e) / exp_sum_d  is the derivative of the lse(alpha > 0) function
-      }
-      for(int o = 0; o < number_of_hyperplanes_of_surround_car; o++)
-      {
-        Eigen::Vector2d partial_d_E_o_tilde_over_partial_sigma = surround_normal_vectors_vec[o];
-        partial_G_over_partial_sigma -= d_test(o + number_of_hyperplanes_of_ego_car) / exp_sum_d * partial_d_E_o_tilde_over_partial_sigma;
-        // d_test(o) / exp_sum_d  is the derivative of the lse(alpha > 0) function
-      }
-      /*--------------------------------------------------------------------------------------*/
-
-
-      /*-------------This part calculates the partial G over partial sigma_dot----------------*/
-      Eigen::Vector2d partial_G_over_partial_dsigma(0.0, 0.0);
-      for(int e = 0; e < number_of_hyperplanes_of_ego_car; e++)
-      {
-        Eigen::Matrix2d F_delta_le = F_delta_le_vec[e];
-        Eigen::Matrix2d F_le = F_le_vec[e];
-        Eigen::Vector2d le = vec_le[e];
-        Eigen::Vector2d delta_le = vec_le[e + 1] - vec_le[e];
-        double d_Uo_e_exp_sum = surround2ego_sum_exp_vec(e);
-
-        Eigen::Vector2d partial_d_U_e_tilde_over_partial_dsigma 
-              = (F_delta_le * B_h * (-surround_p + sigma + ego_R * le) - F_le * B_h * ego_R * delta_le) / delta_le.norm();
-                //  = F_delta_le * B_h * sigma / (delta_le.norm());
-
-        Eigen::Vector2d partial_d_U_e_over_partial_dsigma = partial_d_U_e_tilde_over_partial_dsigma;
-        for(int o = 0; o < number_of_hyperplanes_of_surround_car; o++)
-        {
-          double d_Uo_e = vec_d_Uo_e_vec[e](o);
-          Eigen::Vector2d lo = vec_lo[o];
-          Eigen::Vector2d partial_d_Uo_e_over_partial_dsigma 
-                      = F_delta_le * B_h.transpose() * (surround_R * lo) / (delta_le.norm());
-
-          partial_d_U_e_over_partial_dsigma += d_Uo_e / d_Uo_e_exp_sum * partial_d_Uo_e_over_partial_dsigma;
-        }
-
-        partial_G_over_partial_dsigma -= d_test(e) / exp_sum_d * partial_d_U_e_over_partial_dsigma;
-      }
-
-      for(int o = 0; o < number_of_hyperplanes_of_surround_car; o++)
-      {
-        Eigen::Vector2d delta_lo = vec_lo[o + 1] - vec_lo[o];
-        double d_Ee_o_exp_sum = ego2surround_sum_exp_vec(o);
-
-        Eigen::Vector2d partial_d_E_o_over_partial_dsigma(0.0, 0.0);
-        for(int e = 0; e < number_of_hyperplanes_of_ego_car; e++)
-        {
-          Eigen::Matrix2d F_le = F_le_vec[e];
-          double d_Ee_o = vec_d_Ee_o_vec[o](e);
-
-          Eigen::Vector2d partial_d_Ee_o_over_partial_dsigma
-                                = F_le * B_h * surround_R * delta_lo / (delta_lo.norm());
-
-          partial_d_E_o_over_partial_dsigma += d_Ee_o / d_Ee_o_exp_sum * partial_d_Ee_o_over_partial_dsigma;
-        }
-
-        partial_G_over_partial_dsigma -= d_test(o + number_of_hyperplanes_of_ego_car) / exp_sum_d * partial_d_E_o_over_partial_dsigma;
-      }
-      /*--------------------------------------------------------------------------------------*/
+    //   /*---------------This part calculates the parital G over partial sigma-----------------*/
+    //   Eigen::Vector2d partial_G_over_partial_sigma(0.0, 0.0); 
+    //   for(int e = 0; e < number_of_hyperplanes_of_ego_car; e++)
+    //   {
+    //     Eigen::Vector2d partial_d_U_e_tilde_over_partial_sigma = - ego_normal_vectors_vec[e];
+    //     partial_G_over_partial_sigma -= d_test(e) / exp_sum_d * partial_d_U_e_tilde_over_partial_sigma;
+    //     // d_test(e) / exp_sum_d  is the derivative of the lse(alpha > 0) function
+    //   }
+    //   for(int o = 0; o < number_of_hyperplanes_of_surround_car; o++)
+    //   {
+    //     Eigen::Vector2d partial_d_E_o_tilde_over_partial_sigma = surround_normal_vectors_vec[o];
+    //     partial_G_over_partial_sigma -= d_test(o + number_of_hyperplanes_of_ego_car) / exp_sum_d * partial_d_E_o_tilde_over_partial_sigma;
+    //     // d_test(o) / exp_sum_d  is the derivative of the lse(alpha > 0) function
+    //   }
+    //   /*--------------------------------------------------------------------------------------*/
 
 
-      /*-------------This part calculates the partial G over partial t_bar--------------------*/
-      Eigen::Matrix<double, 1, 1> partial_G_over_partial_t_bar_mat
-                = partial_G_over_partial_sigma.transpose() * dsigma + partial_G_over_partial_dsigma.transpose() * ddsigma;
-      double partial_G_over_partial_t_bar = partial_G_over_partial_t_bar_mat(0, 0);
-      // Even though partial G over partial t_bar is a double, the calculation is still a 1*1 matrix
-      /*--------------------------------------------------------------------------------------*/
+    //   /*-------------This part calculates the partial G over partial sigma_dot----------------*/
+    //   Eigen::Vector2d partial_G_over_partial_dsigma(0.0, 0.0);
+    //   for(int e = 0; e < number_of_hyperplanes_of_ego_car; e++)
+    //   {
+    //     Eigen::Matrix2d F_delta_le = F_delta_le_vec[e];
+    //     Eigen::Matrix2d F_le = F_le_vec[e];
+    //     Eigen::Vector2d le = vec_le[e];
+    //     Eigen::Vector2d delta_le = vec_le[e + 1] - vec_le[e];
+    //     double d_Uo_e_exp_sum = surround2ego_sum_exp_vec(e);
+
+    //     Eigen::Vector2d partial_d_U_e_tilde_over_partial_dsigma 
+    //           = (F_delta_le * B_h * (-surround_p + sigma + ego_R * le) - F_le * B_h * ego_R * delta_le) / delta_le.norm();
+    //             //  = F_delta_le * B_h * sigma / (delta_le.norm());
+
+    //     Eigen::Vector2d partial_d_U_e_over_partial_dsigma = partial_d_U_e_tilde_over_partial_dsigma;
+    //     for(int o = 0; o < number_of_hyperplanes_of_surround_car; o++)
+    //     {
+    //       double d_Uo_e = vec_d_Uo_e_vec[e](o);
+    //       Eigen::Vector2d lo = vec_lo[o];
+    //       Eigen::Vector2d partial_d_Uo_e_over_partial_dsigma 
+    //                   = F_delta_le * B_h.transpose() * (surround_R * lo) / (delta_le.norm());
+
+    //       partial_d_U_e_over_partial_dsigma += d_Uo_e / d_Uo_e_exp_sum * partial_d_Uo_e_over_partial_dsigma;
+    //     }
+
+    //     partial_G_over_partial_dsigma -= d_test(e) / exp_sum_d * partial_d_U_e_over_partial_dsigma;
+    //   }
+
+    //   for(int o = 0; o < number_of_hyperplanes_of_surround_car; o++)
+    //   {
+    //     Eigen::Vector2d delta_lo = vec_lo[o + 1] - vec_lo[o];
+    //     double d_Ee_o_exp_sum = ego2surround_sum_exp_vec(o);
+
+    //     Eigen::Vector2d partial_d_E_o_over_partial_dsigma(0.0, 0.0);
+    //     for(int e = 0; e < number_of_hyperplanes_of_ego_car; e++)
+    //     {
+    //       Eigen::Matrix2d F_le = F_le_vec[e];
+    //       double d_Ee_o = vec_d_Ee_o_vec[o](e);
+
+    //       Eigen::Vector2d partial_d_Ee_o_over_partial_dsigma
+    //                             = F_le * B_h * surround_R * delta_lo / (delta_lo.norm());
+
+    //       partial_d_E_o_over_partial_dsigma += d_Ee_o / d_Ee_o_exp_sum * partial_d_Ee_o_over_partial_dsigma;
+    //     }
+
+    //     partial_G_over_partial_dsigma -= d_test(o + number_of_hyperplanes_of_ego_car) / exp_sum_d * partial_d_E_o_over_partial_dsigma;
+    //   }
+    //   /*--------------------------------------------------------------------------------------*/
 
 
-      /*---------------This part calculates the partial G over partial t_hat------------------*/
-      double partial_G_over_partial_t_hat = 0.0;
-      // calculate R_u_t_hat_dot first, which means the derivative of surround car's rotation matrix
-      // Eigen::Matrix2d temp_ddsigma_Bddsigma, temp_dsigma_Bdsigma;
-      // temp_ddsigma_Bddsigma << surround_a(0), -surround_a(1),
-      //                          surround_a(1), surround_a(0);
-      // temp_dsigma_Bdsigma << surround_v(0), -surround_v(1),
-      //                        surround_v(1), surround_v(0);
+    //   /*-------------This part calculates the partial G over partial t_bar--------------------*/
+    //   Eigen::Matrix<double, 1, 1> partial_G_over_partial_t_bar_mat
+    //             = partial_G_over_partial_sigma.transpose() * dsigma + partial_G_over_partial_dsigma.transpose() * ddsigma;
+    //   double partial_G_over_partial_t_bar = partial_G_over_partial_t_bar_mat(0, 0);
+    //   // Even though partial G over partial t_bar is a double, the calculation is still a 1*1 matrix
+    //   /*--------------------------------------------------------------------------------------*/
 
-      // Eigen::Matrix2d R_u_t_hat_dot 
-      //   = sur_singul * (temp_ddsigma_Bddsigma * temp_sur_reci0 - temp_dsigma_Bdsigma * pow(temp_sur_reci0, 3) * (surround_v.transpose() * surround_a));
+
+    //   /*---------------This part calculates the partial G over partial t_hat------------------*/
+    //   double partial_G_over_partial_t_hat = 0.0;
+    //   // calculate R_u_t_hat_dot first, which means the derivative of surround car's rotation matrix
+    //   // Eigen::Matrix2d temp_ddsigma_Bddsigma, temp_dsigma_Bdsigma;
+    //   // temp_ddsigma_Bddsigma << surround_a(0), -surround_a(1),
+    //   //                          surround_a(1), surround_a(0);
+    //   // temp_dsigma_Bdsigma << surround_v(0), -surround_v(1),
+    //   //                        surround_v(1), surround_v(0);
+
+    //   // Eigen::Matrix2d R_u_t_hat_dot 
+    //   //   = sur_singul * (temp_ddsigma_Bddsigma * temp_sur_reci0 - temp_dsigma_Bdsigma * pow(temp_sur_reci0, 3) * (surround_v.transpose() * surround_a));
 
       
-      /*attention here! if the pt_time is out of the surround trajectory's time, you should calculate the R_dot again!*/
-      Eigen::Matrix2d R_u_t_hat_dot = surround_trajs_->at(sur_id).traj.getRdot(pt_time);
-      //////////////////////////////////////////////////////////////////////////////////////////////
-      for(int e = 0; e < number_of_hyperplanes_of_ego_car; e++)
-      {
-        Eigen::Vector2d le = vec_le[e];
-        Eigen::Vector2d delta_le = vec_le[e + 1] - vec_le[e];
-        double d_Uo_e_exp_sum = surround2ego_sum_exp_vec(e);
+    //   /*attention here! if the pt_time is out of the surround trajectory's time, you should calculate the R_dot again!*/
+    //   Eigen::Matrix2d R_u_t_hat_dot = surround_trajs_->at(sur_id).traj.getRdot(pt_time);
+    //   //////////////////////////////////////////////////////////////////////////////////////////////
+    //   for(int e = 0; e < number_of_hyperplanes_of_ego_car; e++)
+    //   {
+    //     Eigen::Vector2d le = vec_le[e];
+    //     Eigen::Vector2d delta_le = vec_le[e + 1] - vec_le[e];
+    //     double d_Uo_e_exp_sum = surround2ego_sum_exp_vec(e);
 
-        // double partial_d_U_e_tilde_over_partial_t_hat = (surround_v.transpose() * B_h * ego_R_test * delta_le / delta_le.norm())(0, 0);
-        double partial_d_U_e_tilde_over_partial_t_hat = ego_normal_vectors_vec[e].transpose() * surround_v;
+    //     // double partial_d_U_e_tilde_over_partial_t_hat = (surround_v.transpose() * B_h * ego_R_test * delta_le / delta_le.norm())(0, 0);
+    //     double partial_d_U_e_tilde_over_partial_t_hat = ego_normal_vectors_vec[e].transpose() * surround_v;
         
-        double partial_d_U_e_over_partial_t_hat = partial_d_U_e_tilde_over_partial_t_hat;
-        for(int o = 0; o < number_of_hyperplanes_of_surround_car; o++)
-        {
-          Eigen::Vector2d lo = vec_lo[o];
-          double partial_d_Uo_e_over_partial_t_hat 
-                = ego_normal_vectors_vec[e].transpose() * R_u_t_hat_dot * lo;
+    //     double partial_d_U_e_over_partial_t_hat = partial_d_U_e_tilde_over_partial_t_hat;
+    //     for(int o = 0; o < number_of_hyperplanes_of_surround_car; o++)
+    //     {
+    //       Eigen::Vector2d lo = vec_lo[o];
+    //       double partial_d_Uo_e_over_partial_t_hat 
+    //             = ego_normal_vectors_vec[e].transpose() * R_u_t_hat_dot * lo;
           
-          double d_Uo_e = vec_d_Uo_e_vec[e](o);
-          partial_d_U_e_over_partial_t_hat += d_Uo_e / d_Uo_e_exp_sum * partial_d_Uo_e_over_partial_t_hat;
-        }
+    //       double d_Uo_e = vec_d_Uo_e_vec[e](o);
+    //       partial_d_U_e_over_partial_t_hat += d_Uo_e / d_Uo_e_exp_sum * partial_d_Uo_e_over_partial_t_hat;
+    //     }
 
-        partial_G_over_partial_t_hat -= d_test(e) / exp_sum_d * partial_d_U_e_over_partial_t_hat;
-      }
+    //     partial_G_over_partial_t_hat -= d_test(e) / exp_sum_d * partial_d_U_e_over_partial_t_hat;
+    //   }
 
-      for(int o = 0; o < number_of_hyperplanes_of_surround_car; o++)
-      {
-        double d_Ee_o_exp_sum = ego2surround_sum_exp_vec(o);
+    //   for(int o = 0; o < number_of_hyperplanes_of_surround_car; o++)
+    //   {
+    //     double d_Ee_o_exp_sum = ego2surround_sum_exp_vec(o);
 
-        Eigen::Vector2d lo = vec_lo[o];
-        Eigen::Vector2d delta_lo = vec_lo[o + 1] - vec_lo[o];
-        Eigen::Matrix<double, 1, 1>  temp_variable
-            =   (B_h * R_u_t_hat_dot * delta_lo).transpose() / delta_lo.norm() * (sigma - surround_p - surround_R * lo)
-              + (B_h * surround_R * delta_lo).transpose() / delta_lo.norm() *  (-surround_v - R_u_t_hat_dot * lo);
-        double partial_d_E_o_tilde_over_partial_t_hat = temp_variable(0, 0);
+    //     Eigen::Vector2d lo = vec_lo[o];
+    //     Eigen::Vector2d delta_lo = vec_lo[o + 1] - vec_lo[o];
+    //     Eigen::Matrix<double, 1, 1>  temp_variable
+    //         =   (B_h * R_u_t_hat_dot * delta_lo).transpose() / delta_lo.norm() * (sigma - surround_p - surround_R * lo)
+    //           + (B_h * surround_R * delta_lo).transpose() / delta_lo.norm() *  (-surround_v - R_u_t_hat_dot * lo);
+    //     double partial_d_E_o_tilde_over_partial_t_hat = temp_variable(0, 0);
 
-        double partial_d_E_o_over_partial_t_hat = partial_d_E_o_tilde_over_partial_t_hat;
-        for(int e = 0; e < number_of_hyperplanes_of_ego_car; e++)
-        {
-          double d_Ee_o = vec_d_Ee_o_vec[o](e);
-          Eigen::Vector2d le = vec_le[e];
-          double partial_d_Ee_o_over_partial_t_hat = ((ego_R * le).transpose() * B_h * R_u_t_hat_dot * delta_lo / delta_lo.norm())(0, 0);
+    //     double partial_d_E_o_over_partial_t_hat = partial_d_E_o_tilde_over_partial_t_hat;
+    //     for(int e = 0; e < number_of_hyperplanes_of_ego_car; e++)
+    //     {
+    //       double d_Ee_o = vec_d_Ee_o_vec[o](e);
+    //       Eigen::Vector2d le = vec_le[e];
+    //       double partial_d_Ee_o_over_partial_t_hat = ((ego_R * le).transpose() * B_h * R_u_t_hat_dot * delta_lo / delta_lo.norm())(0, 0);
 
-          partial_d_E_o_over_partial_t_hat += d_Ee_o / d_Ee_o_exp_sum * partial_d_Ee_o_over_partial_t_hat;
-        }
+    //       partial_d_E_o_over_partial_t_hat += d_Ee_o / d_Ee_o_exp_sum * partial_d_Ee_o_over_partial_t_hat;
+    //     }
 
-        partial_G_over_partial_t_hat -= d_test(o + number_of_hyperplanes_of_ego_car) / exp_sum_d * partial_d_E_o_over_partial_t_hat;
-      }
-      /*--------------------------------------------------------------------------------------*/      
-
-
-      gradp = partial_G_over_partial_sigma;
-      gradp2 = partial_G_over_partial_dsigma;
-      gradt = partial_G_over_partial_t_bar;
-      grad_prev_t = partial_G_over_partial_t_hat;
+    //     partial_G_over_partial_t_hat -= d_test(o + number_of_hyperplanes_of_ego_car) / exp_sum_d * partial_d_E_o_over_partial_t_hat;
+    //   }
+    //   /*--------------------------------------------------------------------------------------*/      
 
 
-      gradViolaPc = beta0 * gradp.transpose() + beta1 * gradp2.transpose();
-      gradViolaPt = gama * gradt;
-      jerkOpt_container[trajid].get_gdC().block<6, 2>(pieceid * 6, 0) += omg * step * wei_surround_ *violaDynamicObsPenaD*gradViolaPc; // j gradient to c
+    //   gradp = partial_G_over_partial_sigma;
+    //   gradp2 = partial_G_over_partial_dsigma;
+    //   gradt = partial_G_over_partial_t_bar;
+    //   grad_prev_t = partial_G_over_partial_t_hat;
+
+
+    //   gradViolaPc = beta0 * gradp.transpose() + beta1 * gradp2.transpose();
+    //   gradViolaPt = gama * gradt;
+    //   jerkOpt_container[trajid].get_gdC().block<6, 2>(pieceid * 6, 0) += omg * step * wei_surround_ *violaDynamicObsPenaD*gradViolaPc; // j gradient to c
       
-      // gdTs[trajid](pieceid) += omg * wei_surround_ * (violaDynamicObsPena / trajres +  violaDynamicObsPenaD * gradViolaPt * step);                     // j gradient to t
-      // if (pieceid > 0)
-      // {
-      //   gdTs[trajid].head(pieceid).array() += omg * step * wei_surround_ * grad_prev_t * violaDynamicObsPenaD; // the gradient of absolute t
-      // }
-      // gdTs[trajid](pieceid) += omg * step * wei_surround_ *  gama * grad_prev_t * violaDynamicObsPenaD; 
+    //   // gdTs[trajid](pieceid) += omg * wei_surround_ * (violaDynamicObsPena / trajres +  violaDynamicObsPenaD * gradViolaPt * step);                     // j gradient to t
+    //   // if (pieceid > 0)
+    //   // {
+    //   //   gdTs[trajid].head(pieceid).array() += omg * step * wei_surround_ * grad_prev_t * violaDynamicObsPenaD; // the gradient of absolute t
+    //   // }
+    //   // gdTs[trajid](pieceid) += omg * step * wei_surround_ *  gama * grad_prev_t * violaDynamicObsPenaD; 
 
-      // for(int idx = 0; idx < trajid; idx++){
-      //   gdTs[idx].array() += omg * step * wei_surround_ * grad_prev_t * violaDynamicObsPenaD;
-      // }
-      jerkOpt_container[trajid].get_gdT() += omg * wei_surround_ * (violaDynamicObsPena / trajres +  violaDynamicObsPenaD * gradViolaPt * step);                     // j gradient to t
-    // the gradient of absolute t
-      jerkOpt_container[trajid].get_gdT() += omg * step * wei_surround_ * grad_prev_t * violaDynamicObsPenaD * pieceid; 
-      jerkOpt_container[trajid].get_gdT()+= omg * step * wei_surround_ *  gama * grad_prev_t * violaDynamicObsPenaD; 
-      for(int idx = 0; idx < trajid; idx++){
-        jerkOpt_container[trajid].get_gdT() += omg * step * wei_surround_ * grad_prev_t * violaDynamicObsPenaD * piece_num_container[trajid];
-      }
+    //   // for(int idx = 0; idx < trajid; idx++){
+    //   //   gdTs[idx].array() += omg * step * wei_surround_ * grad_prev_t * violaDynamicObsPenaD;
+    //   // }
+    //   jerkOpt_container[trajid].get_gdT() += omg * wei_surround_ * (violaDynamicObsPena / trajres +  violaDynamicObsPenaD * gradViolaPt * step);                     // j gradient to t
+    // // the gradient of absolute t
+    //   jerkOpt_container[trajid].get_gdT() += omg * step * wei_surround_ * grad_prev_t * violaDynamicObsPenaD * pieceid; 
+    //   jerkOpt_container[trajid].get_gdT()+= omg * step * wei_surround_ *  gama * grad_prev_t * violaDynamicObsPenaD; 
+    //   for(int idx = 0; idx < trajid; idx++){
+    //     jerkOpt_container[trajid].get_gdT() += omg * step * wei_surround_ * grad_prev_t * violaDynamicObsPenaD * piece_num_container[trajid];
+    //   }
 
       
 
 
     
-    }
-    return totalPenalty;
+    // }
+    // return totalPenalty;
+    return 0.0;
   }
 
   double PolyTrajOptimizer::log_sum_exp(double alpha, Eigen::VectorXd &all_dists, double &exp_sum)
@@ -1711,8 +1654,7 @@ double PolyTrajOptimizer::debugGradCheck(const int i_dp, // index of constraint 
 
 
   /* helper functions */
-  void PolyTrajOptimizer::setParam()
-  {
+  void PolyTrajOptimizer::setParam() {
     traj_resolution_ = 16;
     destraj_resolution_ = 32;
     wei_obs_ = 1000.0;
@@ -1778,303 +1720,9 @@ double PolyTrajOptimizer::debugGradCheck(const int i_dp, // index of constraint 
     number_of_hyperplanes_of_ego_car_ = vec_le_.size() - 1;
     number_of_hyperplanes_of_surround_car_ = vec_lo_.size() - 1;         
 
-
-  }
-
-
-
-  // void PolyTrajOptimizer::displayPoints()
-  // {
-  //   visualization_msgs::Marker mk;
-  //   mk.header.frame_id = "map";
-  //   mk.header.stamp = ros::Time::now();
-  //   mk.type = visualization_msgs::Marker::LINE_STRIP;
-  //   mk.action = visualization_msgs::Marker::DELETE;
-
-  //   debug_pub.publish(mk);
-  //   geometry_msgs::Point pt;
-  //   std_msgs::ColorRGBA pc;
-
-  //   mk.action = visualization_msgs::Marker::ADD;
-  //   mk.pose.orientation.w = 1.0;
-  //   mk.scale.x = 0.1;
-
-  //   pc.r = 0.5;
-  //   pc.g = 0;
-  //   pc.b = 0;
-  //   pc.a = 0.6;
-
-  //   for (int i = 0; i < ctrl_points_.cols(); i++)
-  //   {
-      
-  //     pt.x = ctrl_points_(0, i);
-  //     pt.y = ctrl_points_(1, i);
-  //     if(isnan(pt.x)||isnan(pt.y)||abs(pt.x)>=100||abs(pt.y)>=100) return;
-  //     pt.z = 0.1;
-
-  //     mk.points.push_back(pt);
-  //     mk.colors.push_back(pc);
-  //   }
-
-  //   debug_pub.publish(mk);
-
-  // }
-
-  // void PolyTrajOptimizer::displayKeyPoints()
-  // {
-  //   visualization_msgs::Marker mk;
-  //   mk.header.frame_id = "map";
-  //   mk.header.stamp = ros::Time::now();
-  //   mk.type = visualization_msgs::Marker::SPHERE_LIST;
-  //   mk.action = visualization_msgs::Marker::DELETE;
-
-  //   debug_key_points_pub.publish(mk);
-  //   geometry_msgs::Point pt;
-  //   std_msgs::ColorRGBA pc;
-
-  //   mk.action = visualization_msgs::Marker::ADD;
-  //   mk.pose.orientation.w = 1.0;
-  //   mk.scale.x = 0.4;
-  //   mk.scale.y = 0.4;
-  //   mk.scale.z = 0.4;
-
-  //   pc.r = 0.0;
-  //   pc.g = 0;
-  //   pc.b = 1.0;
-  //   pc.a = 0.6;
-
-  //   for (int i = 0; i < key_points.size(); i++)
-  //   {
-      
-  //     pt.x = key_points[i][0];
-  //     pt.y = key_points[i][1];
-  //     if(isnan(pt.x)||isnan(pt.y)||abs(pt.x)>=100||abs(pt.y)>=100) return;
-  //     pt.z = 0.3;
-
-  //     mk.points.push_back(pt);
-  //     mk.colors.push_back(pc);
-  //   }
-
-  //   debug_key_points_pub.publish(mk);
-
-  // }
-  
-  // void PolyTrajOptimizer::displayCosPoints(){
-  //   visualization_msgs::Marker mk;
-  //   mk.header.frame_id = "map";
-  //   mk.header.stamp = ros::Time::now();
-  //   mk.type = visualization_msgs::Marker::SPHERE_LIST;
-  //   mk.scale.x = 0.1;
-  //   mk.action = visualization_msgs::Marker::DELETE;
-
-  //   debug_pub1.publish(mk);
-  //   geometry_msgs::Point pt;
-  //   std_msgs::ColorRGBA pc;
-
-  //   mk.action = visualization_msgs::Marker::ADD;
-  //   mk.pose.orientation.w = 1.0;
-  //   mk.scale.x = 0.1;
-
-  //   pc.r = 0.0;
-  //   pc.g = 0;
-  //   pc.b = 0;
-  //   pc.a = 0.6;
-  //   // std::cout<<"11111111111111111111111111111111111111\n";
-  //   for (int i = 0; i < cos_points.size(); i++)
-  //   {
-  //   //  std::cout<<"cos: "<<cos_points[i].transpose()<<std::endl; 
-  //     pt.x = cos_points[i][0];
-  //     pt.y = cos_points[i][1];
-  //     if(isnan(pt.x)||isnan(pt.y)||abs(pt.x)>=100||abs(pt.y)>=100) return;
-  //     pt.z = 0.1;
-
-  //     mk.points.push_back(pt);
-  //     mk.colors.push_back(pc);
-  //   }
-
-  //   debug_pub1.publish(mk);
-  // }
-  // void  PolyTrajOptimizer::displayBugPoly(){
-
-  //   vec_E<Polyhedron2D> polyhedra;
-  //   polyhedra.reserve(debug_hPolys.size());
-  //   for (const auto &ele : debug_hPolys)
-  //   {
-  //     Polyhedron2D hPoly;
-  //     for (int i = 0; i < ele.cols(); i++)
-  //     {
-  //       hPoly.add(Hyperplane2D(ele.col(i).tail<2>(), ele.col(i).head<2>()));
-  //     }
-  //     polyhedra.push_back(hPoly);
-  //   }
-
-  //   decomp_ros_msgs::PolyhedronArray poly_msg = DecompROS::polyhedron_array_to_ros(polyhedra);
-  //   poly_msg.header.frame_id = "map";
-  //   poly_msg.header.stamp = ros::Time::now();
-  //   debug_galaxy_poly_pub_.publish(poly_msg);
-
-  // }
-
-  void PolyTrajOptimizer::setSurroundTrajs(plan_utils::SurroundTrajData *surround_trajs_ptr) { surround_trajs_ = surround_trajs_ptr; 
   }
   
-  bool PolyTrajOptimizer::dynamicObsCosCheck(double t_now, const Eigen::MatrixXd iniStates, int trajid, int sur_id){
-    Eigen::Matrix2d ego_R, help_R;                                          
-    int singul_ = singul_container[trajid];
-    int sur_singul_ = 1;
-    if (surround_trajs_==NULL||surround_trajs_->size() < 1) return false;
-    double alpha = 100.0, d_min = surround_clearance_ + std::log(8.0) / alpha; // may have problems hzc
-    double pt_time ;
-    double traj_i_satrt_time = surround_trajs_->at(sur_id).start_time;
-    
-    double dG_dsd, temp0, temp0_reci, temp1, temp2, temp3, temp4, temp5, temp6, temp7;
-    double temp_sur0, temp_sur_reci0, temp_sur1, temp_sur2, temp_sur3;
-    Eigen::Vector2d temp_vec1, temp_vec2, temp_vec3, temp_vec4;
-    Eigen::Matrix<double, 2, 8> grad_sd_sigma, grad_sd_dsigma;
-    Eigen::Matrix<double, 2, 4> ego_bound_points, surround_bound_points;
-    Eigen::VectorXd grad_sd_rt(8), grad_sd_prevt(8);
-    Eigen::VectorXd signed_dists(8),   ego_signed_dists1(4), ego_signed_dists2(4),ego_signed_dists3(4), ego_signed_dists4(4),
-          surround_signed_dists1(4), surround_signed_dists2(4),surround_signed_dists3(4), surround_signed_dists4(4);
-    Eigen::Vector2d surround_p, surround_v, surround_a;
-    Eigen::Matrix2d surround_R,help_surround_R;
-    Eigen::Vector2d temp_point;
-    double surround_exp_sum1, surround_exp_sum2,surround_exp_sum3,surround_exp_sum4,
-            ego_exp_sum1, ego_exp_sum2,ego_exp_sum3, ego_exp_sum4, exp_sum;
-    double z_h0;
+  // bool PolyTrajOptimizer::dynamicObsCosCheck(double t_now, const Eigen::MatrixXd iniStates, int trajid, int sur_id);
 
-    double offsettime =  t_now - traj_i_satrt_time;
-
-    pt_time= offsettime;
-    Eigen::Vector2d sigma,dsigma,ddsigma;
-    sigma = iniStates.col(0);
-    dsigma = iniStates.col(1);
-    ddsigma = iniStates.col(2);
-
-
-
-    z_h0 = 1.0/dsigma.norm();
-    ego_R << dsigma(0), -dsigma(1),
-              dsigma(1),  dsigma(0);
-    ego_R = ego_R * z_h0;
-    help_R << ddsigma(0), -ddsigma(1),
-              ddsigma(1),  ddsigma(0);
-    help_R = help_R * z_h0;
-
-    temp0 = dsigma.norm(); //  ||dsigma||_2
-    
-    if (temp0 != 0.0){
-      temp0_reci = 1.0 / temp0;
-    }else{
-      temp0_reci = 0.0;
-      ROS_ERROR("1111111111111111111111111111111111111111111111111111");
-    }
-    temp1 = double(dsigma.transpose() * sigma) * temp0_reci; //(dsigma.transpose() * sigma) / temp0_reci; // dsigma^T * sigma /  ||dsigma||_2
-    temp2 = double(dsigma.transpose() * B_h * sigma) * temp0_reci;
-    temp3 = temp0_reci * temp0_reci; // ||dsigma||_2^2
-    temp4 = temp3 * temp0_reci; // ||dsigma||_2^3
-    temp5 = double(ddsigma.transpose() * dsigma) * temp3;
-    temp6 = -(temp0 + double(ddsigma.transpose() * sigma) * temp0_reci - temp5 * temp1);
-    temp7 = -(double(ddsigma.transpose() * B_h * sigma) * temp0_reci - temp5 * temp2);
-    temp_vec1 = -(sigma * temp0_reci - temp1 * temp3 * dsigma);
-    temp_vec2 = -(B_h * sigma * temp0_reci - temp2 * temp3 * dsigma);
-
-
-    if (pt_time < surround_trajs_->at(sur_id).duration)
-    {
-      surround_p = surround_trajs_->at(sur_id).traj.getPos(pt_time );
-      surround_v = surround_trajs_->at(sur_id).traj.getdSigma(pt_time );
-      surround_a = surround_trajs_->at(sur_id).traj.getddSigma(pt_time);
-
-    }
-    else
-    {
-      double exceed_time = pt_time - surround_trajs_->at(sur_id).duration;
-      surround_a = surround_trajs_->at(sur_id).traj.getddSigma(surround_trajs_->at(sur_id).duration);
-      surround_v = surround_trajs_->at(sur_id).traj.getdSigma(surround_trajs_->at(sur_id).duration) +
-                    exceed_time * surround_a;
-      surround_p = surround_trajs_->at(sur_id).traj.getPos(surround_trajs_->at(sur_id).duration) +
-                    exceed_time * surround_trajs_->at(sur_id).traj.getdSigma(surround_trajs_->at(sur_id).duration) + 
-                    0.5 * surround_a * exceed_time * exceed_time;
-      //surround_a may be set as 0 problem?
-      ROS_ERROR("ASDASDASDASDASDA");
-    }
-
-    temp_sur0 = surround_v.norm();
-    if (temp_sur0 != 0.0)
-    {
-      temp_sur_reci0 = 1.0 / temp_sur0;
-    }
-    else
-    {
-      temp_sur_reci0 = 0.0;
-      ROS_ERROR("2222222222222222222222222222222222222222222222222222222");
-    }
-
-    temp_sur1 = double(surround_v.transpose() * surround_p) * temp_sur_reci0;
-    temp_sur2 = double(surround_v.transpose() * B_h * surround_p) * temp_sur_reci0;
-    temp_sur3 = double(surround_a.transpose() * surround_v) * (temp_sur_reci0 * temp_sur_reci0);
-
-    surround_R << surround_v(0), -surround_v(1),
-        surround_v(1), surround_v(0);
-    surround_R = surround_R * temp_sur_reci0;
-    help_surround_R << surround_a(0),-surround_a(1),
-                        surround_a(1),surround_a(0);
-    help_surround_R = help_surround_R * temp_sur_reci0;
-
-    //  ==========the help intermediate variables.
-
-    // ===========the help intermediate variables.
-    Eigen::Vector4d dtemp1;
-    Eigen::VectorXd sdis; sdis.resize(8);
-    for (unsigned int i = 0; i < 4; i++)
-    {
-      Eigen::Vector2d lz = lz_set_.at(i);
-      lz(0) += singul_ * veh_param_.d_cr();
-
-      temp_point = sigma + ego_R * lz;
-      ego_signed_dists1(i) = double(surround_v.transpose() * temp_point) * temp_sur_reci0; // cr0 
-      ego_signed_dists2(i) = double(-surround_v.transpose() * temp_point) * temp_sur_reci0; //cr1
-      ego_signed_dists3(i) = double(surround_v.transpose() * B_h * temp_point) * temp_sur_reci0; //cr3
-      ego_signed_dists4(i) = double(-surround_v.transpose() * B_h * temp_point) * temp_sur_reci0; //cr2
-      ego_bound_points.col(i) = temp_point; // 2*1
-
-      Eigen::Vector2d surlz = lz_set_.at(i);
-      surlz(0) += sur_singul_ * veh_param_.d_cr();
-
-      temp_point = surround_p + surround_R * surlz;
-      surround_signed_dists1(i) = double(dsigma.transpose() * temp_point) * temp0_reci; // cr0
-      dtemp1[i] = surround_signed_dists1(i);
-      surround_signed_dists2(i) = double(-dsigma.transpose() * temp_point) * temp0_reci; //cr1
-      surround_signed_dists3(i) = double(dsigma.transpose() * B_h * temp_point) * temp0_reci; //cr3
-      surround_signed_dists4(i) = double(-dsigma.transpose() * B_h * temp_point) * temp0_reci; //cr2
-      surround_bound_points.col(i) = temp_point;
-    }
-
-    // d1_ego - d4_ego
-    signed_dists(0) = log_sum_exp(-alpha, surround_signed_dists1, surround_exp_sum1) - temp1 - veh_param_.d_cr() - veh_param_.length() / 2.0;
-    signed_dists(1) = log_sum_exp(-alpha, surround_signed_dists2, surround_exp_sum2) + temp1 + veh_param_.d_cr() - veh_param_.length() / 2.0;
-    signed_dists(2) = log_sum_exp(-alpha, surround_signed_dists3, surround_exp_sum3) - temp2 - veh_param_.width() / 2.0;
-    signed_dists(3) = log_sum_exp(-alpha, surround_signed_dists4, surround_exp_sum4) + temp2 - veh_param_.width() / 2.0;
-
-    // d1_sur = d4_sur
-    signed_dists(4) = log_sum_exp(-alpha, ego_signed_dists1, ego_exp_sum1) - temp_sur1 - veh_param_.d_cr() - veh_param_.length() / 2.0;
-    signed_dists(5) = log_sum_exp(-alpha, ego_signed_dists2, ego_exp_sum2) + temp_sur1 + veh_param_.d_cr() - veh_param_.length() / 2.0;
-    signed_dists(6) = log_sum_exp(-alpha, ego_signed_dists3, ego_exp_sum3) - temp_sur2 - veh_param_.width() / 2.0;
-    signed_dists(7) = log_sum_exp(-alpha, ego_signed_dists4, ego_exp_sum4) + temp_sur2 - veh_param_.width() / 2.0;
-    // ------------------------------- add cost
-    for(int i = 0;i<8;i++)
-      sdis(i) = signed_dists(i);
-    
-
-
-    double d_value1 = d_min -log_sum_exp(alpha, signed_dists, exp_sum);
-    if(d_value1>0){
-      return true;
-    }
-    else{
-      return false;
-    }
-  }
-
-  void PolyTrajOptimizer::setDroneId(const int drone_id) { drone_id_ = drone_id; }
+  // void PolyTrajOptimizer::setDroneId(const int drone_id) { drone_id_ = drone_id; }
 }  // namespace plan_manage

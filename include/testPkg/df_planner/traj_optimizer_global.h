@@ -4,6 +4,9 @@
 
 #include "df_planner/traj_container.h"
 #include "df_planner/traj_utils.h"
+#include "df_planner/constants.h"
+#include "df_planner/lbfgs_global.hpp"
+#include "df_planner/lbfgs.h"
 
 namespace plan_manage {
 
@@ -52,7 +55,7 @@ namespace plan_manage {
     std::vector<Eigen::Vector2d> cos_points;
     std::vector<Eigen::Vector2d> key_points;
     std::vector<Eigen::MatrixXd> debug_hPolys;
-    std::vector<plan_utils::MinJerkOpt> jerkOpt_container;
+    std::vector<traj_utils::MinJerkOpt> jerkOpt_container;
     std::vector<int> piece_num_container;
 
   public:
@@ -69,7 +72,7 @@ namespace plan_manage {
     double surround_clearance_; // safe distance
     
     double half_margin;                        // safe margin
-    VehicleParam veh_param_;          
+    traj_utils::VehicleParam veh_param_;          
     double t_now_;
     double L_;
     std::vector<Eigen::Vector2d> lz_set_;
@@ -92,11 +95,11 @@ namespace plan_manage {
     void displayKeyPoints();
     // void setEnvironment(const GridMap::Ptr &map);
     void setControlPoints(const Eigen::MatrixXd &points);
-    void setSurroundTrajs(plan_utils::SurroundTrajData *surround_trajs_ptr);
+    // void setSurroundTrajs(plan_utils::SurroundTrajData *surround_trajs_ptr);
     void setDroneId(const int drone_id);
 
     /* helper functions */
-    inline const std::vector<plan_utils::MinJerkOpt> *getMinJerkOptPtr(void) { return &jerkOpt_container; }
+    inline const std::vector<traj_utils::MinJerkOpt> *getMinJerkOptPtr(void) { return &jerkOpt_container; }
     inline int get_traj_resolution_() { return traj_resolution_; };
     inline int get_destraj_resolution_() { return destraj_resolution_; };
     inline double getsurroundClearance(void) { return surround_clearance_; }
@@ -178,44 +181,44 @@ namespace plan_manage {
     inline bool extractVs(const std::vector<Eigen::MatrixXd> &hPs,
                           std::vector<Eigen::MatrixXd> &vPs) const
     {
-        const int M = hPs.size() - 1;
+        // const int M = hPs.size() - 1;
 
-        vPs.clear();
-        vPs.reserve(2 * M + 1);
+        // vPs.clear();
+        // vPs.reserve(2 * M + 1);
 
-        int nv;
-        Eigen::MatrixXd curIH, curIV, curIOB;
-        for (int i = 0; i < M; i++)
-        {
-            if (!geoutils::enumerateVs(hPs[i], curIV))
-            {
-                return false;
-            }
-            nv = curIV.cols();
-            curIOB.resize(3, nv);
-            curIOB << curIV.col(0), curIV.rightCols(nv - 1).colwise() - curIV.col(0);
-            vPs.push_back(curIOB);
+        // int nv;
+        // Eigen::MatrixXd curIH, curIV, curIOB;
+        // for (int i = 0; i < M; i++)
+        // {
+        //     if (!geoutils::enumerateVs(hPs[i], curIV))
+        //     {
+        //         return false;
+        //     }
+        //     nv = curIV.cols();
+        //     curIOB.resize(3, nv);
+        //     curIOB << curIV.col(0), curIV.rightCols(nv - 1).colwise() - curIV.col(0);
+        //     vPs.push_back(curIOB);
 
-            curIH.resize(6, hPs[i].cols() + hPs[i + 1].cols());
-            curIH << hPs[i], hPs[i + 1];
-            if (!geoutils::enumerateVs(curIH, curIV))
-            {
-                return false;
-            }
-            nv = curIV.cols();
-            curIOB.resize(3, nv);
-            curIOB << curIV.col(0), curIV.rightCols(nv - 1).colwise() - curIV.col(0);
-            vPs.push_back(curIOB);
-        }
+        //     curIH.resize(6, hPs[i].cols() + hPs[i + 1].cols());
+        //     curIH << hPs[i], hPs[i + 1];
+        //     if (!geoutils::enumerateVs(curIH, curIV))
+        //     {
+        //         return false;
+        //     }
+        //     nv = curIV.cols();
+        //     curIOB.resize(3, nv);
+        //     curIOB << curIV.col(0), curIV.rightCols(nv - 1).colwise() - curIV.col(0);
+        //     vPs.push_back(curIOB);
+        // }
 
-        if (!geoutils::enumerateVs(hPs.back(), curIV))
-        {
-            return false;
-        }
-        nv = curIV.cols();
-        curIOB.resize(3, nv);
-        curIOB << curIV.col(0), curIV.rightCols(nv - 1).colwise() - curIV.col(0);
-        vPs.push_back(curIOB);
+        // if (!geoutils::enumerateVs(hPs.back(), curIV))
+        // {
+        //     return false;
+        // }
+        // nv = curIV.cols();
+        // curIOB.resize(3, nv);
+        // curIOB << curIV.col(0), curIV.rightCols(nv - 1).colwise() - curIV.col(0);
+        // vPs.push_back(curIOB);
 
         return true;
     }
@@ -231,6 +234,63 @@ namespace plan_manage {
 
   public:
     typedef unique_ptr<PolyTrajOptimizer> Ptr;
+    vector<CartesianState> GetResult(double gap) {
+      // 优化结果密集采样输出
+      vector<CartesianState> final_path;
+      for(auto& jerkOpt : jerkOpt_container) {
+        const auto &final_traj = jerkOpt.getTraj(1); 
+        // const double gap = 0.1;
+        const double total_t = final_traj.getTotalDuration();
+        const int duration_size = std::ceil(total_t / gap);
+        int count = 0;
+        for (double t = 0.0; t < total_t; t += gap, ++count) {
+          CartesianState state;
+          const auto pieceIdx = final_traj.locatePieceIdx(t);
+          // cout << "relative_t: " << pieceIdx.first << ", piece_idx" << pieceIdx.second << endl;
+          const auto &piece = final_traj[pieceIdx.first];
+          const double relative_t = pieceIdx.second;
+          piece.getState(relative_t, state);
+          // state->set_t(t);
+          final_path.emplace_back(state);
+          // if(count < 5)
+            // cout << "df_state: " << state.x << ", " << state.y << ", " << state.speed << ", " << state.theta << ", " << state.acc << ", " << state.kappa << endl;
+        }
+        // cout << "final_path_size: " <<  final_path.size() << endl;
+        // const auto &piece_positions = final_traj.getPositions();
+        // for (int j = 0; j < piece_positions.cols(); j++) {
+        //   if (j == 0) {
+        //     cout << "起点：" << piece_positions(0, j) << ", " << piece_positions(1, j) << endl;
+        //   } else if (j == piece_positions.cols() - 1) {
+        //     cout << "终点：" << piece_positions(0, j) << ", " << piece_positions(1, j) << endl;
+        //   } else {
+        //     cout << "中间点：" << piece_positions(0, j) << ", " << piece_positions(1, j) << endl;
+        //   }
+        // }
+      }
+      return final_path;
+    }
+
+    void GetResult(double gap, GlobalPath& refline) {
+      refline = GlobalPath();
+      // 优化结果密集采样输出
+      for(auto& jerkOpt : jerkOpt_container) {
+        const auto &final_traj = jerkOpt.getTraj(1); 
+        // const double gap = 0.1;
+        const double total_t = final_traj.getTotalDuration();
+        const int duration_size = std::ceil(total_t / gap);
+        int count = 0;
+        for (double t = 0.0; t < total_t; t += gap, ++count) {
+          CartesianState state;
+          const auto pieceIdx = final_traj.locatePieceIdx(t);
+          // cout << "relative_t: " << pieceIdx.first << ", piece_idx" << pieceIdx.second << endl;
+          const auto &piece = final_traj[pieceIdx.first];
+          const double relative_t = pieceIdx.second;
+          piece.pushState(relative_t, refline);
+          // if(count < 5)
+            // cout << "df_state: " << state.x << ", " << state.y << ", " << state.speed << ", " << state.theta << ", " << state.acc << ", " << state.kappa << endl;
+        }
+      }
+    }
 
   };
 

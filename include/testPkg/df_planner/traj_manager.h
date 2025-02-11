@@ -4,6 +4,7 @@
 #include <limits>
 
 // #include "dp_planner.hpp"
+#include "df_planner/cubic_spline.hpp"
 #include "df_planner/traj_optimizer.h"
 using namespace plan_manage;
 enum ErrorType { kSuccess = 0, kWrongStatus, kIllegalInput, kUnknown };
@@ -27,7 +28,7 @@ class TrajPlanner {
     const vector<CartesianState>& last_path, 
     vector<CartesianState>& final_result);
 
-  bool RunGlobalOpt(vector<Vector2d>& raw_pt);
+  bool RunGlobalOpt(const vector<Vector2d>& raw_pt, GlobalPath& refline);
 
   bool CalKeyPoint(const vector<CartesianState>& source_path,
                               traj_utils::FlatTrajData* trajs, double duration);
@@ -42,10 +43,12 @@ class TrajPlanner {
   double end_curvature_ = 0.0;
   double end_heading_ = 0.0;
   TrajOptimizer traj_opt_;
+  PolyTrajOptimizer::Ptr ploy_traj_opt_;
   double kRbCollisionBuffur_ = 0.0; //0.15;
   double kLbCollisionBuffur_ = 0.0; //0.15;
   bool is_debug_mode_ = false;
   bool need_extra_rb_buffer_ = false;
+  std::vector<Eigen::MatrixXd> hPolys_, display_hPolys_;
     
     Obstacles obs_;
     int frame_count;
@@ -166,12 +169,11 @@ class TrajPlanner {
         std::cout << "Number of corners: " << count << std::endl;
     }
 
-    bool TrajPlanner::getRectangleConst(std::vector<Eigen::Vector3d> statelist){
+    bool getRectangleConst(std::vector<Eigen::Vector3d> statelist){
         hPolys_.clear();
         double resolution = 1.0; //x1 y0.2
         double step = resolution * 1.0;
         double limitBound = 10.0;
-        visualization_msgs::Marker  carMarkers;
         //generate a rectangle for this state px py yaw
         for(const auto state : statelist){
             //generate a hPoly
@@ -182,11 +184,11 @@ class TrajPlanner {
             Eigen::Vector2d rawPt = sourcePt;
             double yaw = state[2];
             bool test = false;
-            common::VehicleParam sourceVp,rawVp;
+            traj_utils::VehicleParam sourceVp,rawVp;
             Eigen::Matrix2d egoR;
             egoR << cos(yaw), -sin(yaw),
                     sin(yaw), cos(yaw);
-            common::VehicleParam vptest;
+            traj_utils::VehicleParam vptest;
             // map_itf_->CheckIfCollisionUsingPosAndYaw(vptest,state,&test); //检测给的初始点是否合规
     
             Eigen::Vector4d expandLength;
@@ -198,7 +200,7 @@ class TrajPlanner {
                     if(!NotFinishTable[i]) continue;
                     //get the new source and vp
                     Eigen::Vector2d NewsourcePt = sourcePt;
-                    common::VehicleParam NewsourceVp = sourceVp;
+                    traj_utils::VehicleParam NewsourceVp = sourceVp;
                     Eigen::Vector2d point1,point2,newpoint1,newpoint2;
 
                     bool isocc = false;
@@ -211,17 +213,17 @@ class TrajPlanner {
                         newpoint1 = sourcePt + egoR * Eigen::Vector2d(sourceVp.length()/2.0+sourceVp.d_cr(),sourceVp.width()/2.0+step);   
                         newpoint2 = sourcePt + egoR * Eigen::Vector2d(-sourceVp.length()/2.0+sourceVp.d_cr(),sourceVp.width()/2.0+step);
                         //1 new1 new1 new2 new2 2
-                        map_itf_->CheckIfCollisionUsingLine(point1,newpoint1,&isocc,resolution/2.0);
+                        CheckIfCollisionUsingLine(point1,newpoint1,&isocc,resolution/2.0);
                         if(isocc){
                         NotFinishTable[i] = 0.0;
                         break;
                         }
-                        map_itf_->CheckIfCollisionUsingLine(newpoint1,newpoint2,&isocc,resolution/2.0);
+                        CheckIfCollisionUsingLine(newpoint1,newpoint2,&isocc,resolution/2.0);
                         if(isocc){
                         NotFinishTable[i] = 0.0;
                         break;
                         }
-                        map_itf_->CheckIfCollisionUsingLine(newpoint2,point2,&isocc,resolution/2.0);
+                        CheckIfCollisionUsingLine(newpoint2,point2,&isocc,resolution/2.0);
                         if(isocc){
                         NotFinishTable[i] = 0.0;
                         break;
@@ -243,17 +245,17 @@ class TrajPlanner {
                         newpoint1 = sourcePt + egoR * Eigen::Vector2d(step+sourceVp.length()/2.0+sourceVp.d_cr(),-sourceVp.width()/2.0);   
                         newpoint2 = sourcePt + egoR * Eigen::Vector2d(step+sourceVp.length()/2.0+sourceVp.d_cr(),sourceVp.width()/2.0);
                         //1 new1 new1 new2 new2 2
-                        map_itf_->CheckIfCollisionUsingLine(point1,newpoint1,&isocc,resolution/2.0);
+                        CheckIfCollisionUsingLine(point1,newpoint1,&isocc,resolution/2.0);
                         if(isocc){
                         NotFinishTable[i] = 0.0;
                         break;
                         }
-                        map_itf_->CheckIfCollisionUsingLine(newpoint1,newpoint2,&isocc,resolution/2.0);
+                        CheckIfCollisionUsingLine(newpoint1,newpoint2,&isocc,resolution/2.0);
                         if(isocc){
                         NotFinishTable[i] = 0.0;
                         break;
                         }
-                        map_itf_->CheckIfCollisionUsingLine(newpoint2,point2,&isocc,resolution/2.0);
+                        CheckIfCollisionUsingLine(newpoint2,point2,&isocc,resolution/2.0);
                         if(isocc){
                         NotFinishTable[i] = 0.0;
                         break;
@@ -275,17 +277,17 @@ class TrajPlanner {
                         newpoint1 = sourcePt + egoR * Eigen::Vector2d(-sourceVp.length()/2.0+sourceVp.d_cr(),-sourceVp.width()/2.0-step);   
                         newpoint2 = sourcePt + egoR * Eigen::Vector2d(sourceVp.length()/2.0+sourceVp.d_cr(),-sourceVp.width()/2.0-step);
                         //1 new1 new1 new2 new2 2
-                        map_itf_->CheckIfCollisionUsingLine(point1,newpoint1,&isocc,resolution/2.0);
+                        CheckIfCollisionUsingLine(point1,newpoint1,&isocc,resolution/2.0);
                         if(isocc){
                         NotFinishTable[i] = 0.0;
                         break;
                         }
-                        map_itf_->CheckIfCollisionUsingLine(newpoint1,newpoint2,&isocc,resolution/2.0);
+                        CheckIfCollisionUsingLine(newpoint1,newpoint2,&isocc,resolution/2.0);
                         if(isocc){
                         NotFinishTable[i] = 0.0;
                         break;
                         }
-                        map_itf_->CheckIfCollisionUsingLine(newpoint2,point2,&isocc,resolution/2.0);
+                        CheckIfCollisionUsingLine(newpoint2,point2,&isocc,resolution/2.0);
                         if(isocc){
                         NotFinishTable[i] = 0.0;
                         break;
@@ -307,17 +309,17 @@ class TrajPlanner {
                         newpoint1 = sourcePt + egoR * Eigen::Vector2d(-sourceVp.length()/2.0+sourceVp.d_cr()-step,sourceVp.width()/2.0);
                         newpoint2 = sourcePt + egoR * Eigen::Vector2d(-sourceVp.length()/2.0+sourceVp.d_cr()-step,-sourceVp.width()/2.0);
                         //1 new1 new1 new2 new2 2
-                        map_itf_->CheckIfCollisionUsingLine(point1,newpoint1,&isocc,resolution/2.0);
+                        CheckIfCollisionUsingLine(point1,newpoint1,&isocc,resolution/2.0);
                         if(isocc){
                         NotFinishTable[i] = 0.0;
                         break;
                         }
-                        map_itf_->CheckIfCollisionUsingLine(newpoint1,newpoint2,&isocc,resolution/2.0);
+                        CheckIfCollisionUsingLine(newpoint1,newpoint2,&isocc,resolution/2.0);
                         if(isocc){
                         NotFinishTable[i] = 0.0;
                         break;
                         }
-                        map_itf_->CheckIfCollisionUsingLine(newpoint2,point2,&isocc,resolution/2.0);
+                        CheckIfCollisionUsingLine(newpoint2,point2,&isocc,resolution/2.0);
                         if(isocc){
                         NotFinishTable[i] = 0.0;
                         break;
@@ -363,20 +365,21 @@ class TrajPlanner {
         return true;
     }
 
-    bool CheckIfCollisionUsingLine(const Eigen::Vector2d p1, 
+    void CheckIfCollisionUsingLine(const Eigen::Vector2d p1, 
                                            const Eigen::Vector2d p2, bool* res, double checkl){
         for(double dl = 0.0; dl < (p2-p1).norm(); dl+=checkl){
             Eigen::Vector2d pos = (p2-p1)*dl/(p2-p1).norm()+p1;
             if(CheckCollisionUsingGlobalPosition(pos)){
-                return true;
+                *res = true;
+                return;
             }
         }
-        return CheckCollisionUsingGlobalPosition(p2);
+        *res =  CheckCollisionUsingGlobalPosition(p2);
     }
 
     bool CheckCollisionUsingGlobalPosition(const Eigen::Vector2d p1) {
         double x = p1(0);
-        double y = p2(0);
+        double y = p1(1);
         if(x >= 7.7 && x <= 83.8 && y >= 61.3 && y <= 68.3)
             return false;
         else if (x >= 76.7 && x <= 83.8 && y >= 50.2 && y <= 61.3)

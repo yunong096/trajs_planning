@@ -2,8 +2,9 @@
 
 #include <vector>
 
-#include "df_planner/traj_container.h"
-#include "df_planner/traj_utils.h"
+// #include "df_planner/traj_container.h"
+// #include "df_planner/traj_utils.h"
+#include "df_planner/traj_optimizer_global.h"
 
 namespace plan_manage {
 

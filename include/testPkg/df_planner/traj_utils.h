@@ -101,7 +101,7 @@ class Piece {
   Eigen::Vector2d getPos(const double t) const {
     Eigen::Vector2d pos(0.0, 0.0);
     double tn = 1.0;
-    for (int i = order; i >= 0; i--) {
+    for (int i = order; i >= 0; --i) {
       pos += tn * coeffMat.col(i);
       tn *= t;
     }
@@ -214,6 +214,27 @@ class Piece {
       res.kappa = atan(2.7 * (singul *
                          (dsigma(0) * ddsigma(1) - dsigma(1) * ddsigma(0)) /
                          (dsigma_norm * dsigma_norm * dsigma_norm)));
+    }
+  }
+
+  void pushState(const double relative_t, GlobalPath& refline) const {
+    const auto pos = getPos(relative_t);
+    refline.x.emplace_back(pos[0]);
+    refline.y.emplace_back(pos[1]);
+    Eigen::Vector2d dsigma = getdSigma(relative_t);
+    Eigen::Vector2d ddsigma = getddSigma(relative_t);
+    const double dsigma_norm = dsigma.norm();
+    refline.theta.emplace_back(std::atan2(singul * dsigma(1), singul * dsigma(0)));
+    // refline.speed.emplace_back(singul * dsigma.norm());
+    if (dsigma_norm < plan_manage::kEpsilon) {
+      // refline.acc.emplace_back (0.0);
+      refline.kappa.emplace_back(0.0);
+    } else {
+      // refline.acc.emplace_back (singul * (dsigma(0) * ddsigma(0) + dsigma(1) * ddsigma(1)) /
+      //            dsigma_norm);
+      refline.kappa.emplace_back(singul *
+                         (dsigma(0) * ddsigma(1) - dsigma(1) * ddsigma(0)) /
+                         (dsigma_norm * dsigma_norm * dsigma_norm));
     }
   }
 
@@ -726,6 +747,19 @@ class MinJerkOpt {
     return energy;
   }
 
+  inline double getTrajJerkCost(int flag) const {
+      double energy = 0.0;
+      for (int i = 0; i < N; i++) {
+      energy += 36.0 * c.row(6 * i + 3).squaredNorm() * t(1) +
+          144.0 * c.row(6 * i + 4).dot(c.row(6 * i + 3)) * t(2) +
+          192.0 * c.row(6 * i + 4).squaredNorm() * t(3) +
+          240.0 * c.row(6 * i + 5).dot(c.row(6 * i + 3)) * t(3) +
+          720.0 * c.row(6 * i + 5).dot(c.row(6 * i + 4)) * t(4) +
+          720.0 * c.row(6 * i + 5).squaredNorm() * t(5);
+      }
+      return energy;
+  }
+
   Eigen::VectorXd getTrajAccCost() const {
     Eigen::VectorXd energy(N);
     energy.setZero();
@@ -743,6 +777,31 @@ class MinJerkOpt {
           80.0 * c.row(6 * i + 4).dot(c.row(6 * i + 5)) * t(5) * t(1);  // acc项
     }
     return energy;
+  }
+
+  inline void initSmGradCost() {
+      for (int i = 0; i < N; i++) {
+          gdC.row(6 * i + 5) = 240.0 * c.row(6 * i + 3) * t(3) +
+                              720.0 * c.row(6 * i + 4) * t(4) +
+                              1440.0 * c.row(6 * i + 5) * t(5);
+          gdC.row(6 * i + 4) = 144.0 * c.row(6 * i + 3) * t(2) +
+                              384.0 * c.row(6 * i + 4) * t(3) +
+                              720.0 * c.row(6 * i + 5) * t(4);
+          gdC.row(6 * i + 3) = 72.0 * c.row(6 * i + 3) * t(1) +
+                              144.0 * c.row(6 * i + 4) * t(2) +
+                              240.0 * c.row(6 * i + 5) * t(3);
+          gdC.block<3, 2>(6 * i, 0).setZero();
+      }
+      gdT = 0.0;
+      for (int i = 0; i < N; i++) {
+          gdT += 36.0 * c.row(6 * i + 3).squaredNorm() +
+              288.0 * c.row(6 * i + 4).dot(c.row(6 * i + 3)) * t(1) +
+              576.0 * c.row(6 * i + 4).squaredNorm() * t(2) +
+              720.0 * c.row(6 * i + 5).dot(c.row(6 * i + 3)) * t(2) +
+              2880.0 * c.row(6 * i + 5).dot(c.row(6 * i + 4)) * t(3) +
+              3600.0 * c.row(6 * i + 5).squaredNorm() * t(4);
+      }
+      return;
   }
 
   void initSmGradCost(double wei_jerk_, double wei_acc_) {

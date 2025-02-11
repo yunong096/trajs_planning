@@ -833,5 +833,3 @@ namespace lbfgs_global
     }
 
 } // namespace lbfgs
-
-#endif

@@ -22,8 +22,8 @@
 // #include "CoarsePathGenerator.hpp"
 // #include "dp_planner.hpp"
 // #include "nmpc2.hpp"
-// #include "df_planner/traj_manager.h"
-#include "altro_optimizer.hpp"
+#include "df_planner/traj_manager.h"
+// #include "altro_optimizer.hpp"
 
 
 using std::string;

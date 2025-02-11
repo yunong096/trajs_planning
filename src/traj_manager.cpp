@@ -130,8 +130,7 @@ bool TrajPlanner::Run(
   return true; 
 }
 
-bool TrajPlanner::RunGlobalOpt(vector<Vector2d>& raw_pt) {
-  PolyTrajOptimizer::Ptr ploy_traj_opt_;
+bool TrajPlanner::RunGlobalOpt(const vector<Vector2d>& raw_pt, GlobalPath& refline) {
   ploy_traj_opt_.reset(new PolyTrajOptimizer);
   ploy_traj_opt_->setParam();
 
@@ -140,7 +139,6 @@ bool TrajPlanner::RunGlobalOpt(vector<Vector2d>& raw_pt) {
   double basetime = 0.0;
   double dense_traj_res = 32, traj_res = 16;
   double worldtime =  0.0;
-  std::vector<Eigen::MatrixXd> hPolys_, display_hPolys_;
 
   /*try to merge optimization process*/
   std::vector<std::vector<Eigen::MatrixXd>> sfc_container;
@@ -168,6 +166,7 @@ bool TrajPlanner::RunGlobalOpt(vector<Vector2d>& raw_pt) {
         ROS_WARN("DF planner illeal Input");
         return false;
     }
+    singul_container.push_back( i % 2);
     trajs.singul = i % 2;
     int piece_nums;
     double initTotalduration = 0.0;
@@ -194,23 +193,25 @@ bool TrajPlanner::RunGlobalOpt(vector<Vector2d>& raw_pt) {
     double acc_t = 0;
     bool is_two = false;
     if( i % 2 == 0 ) {
-      new_acc = ploy_traj_opt_.max_forward_acc;
-      acc_t  = ploy_traj_opt_.max_forward_vel / new_acc;
-      if(pow(ploy_traj_opt_.max_forward_vel, 2) / ploy_traj_opt_.max_forward_acc < dis) {
-        initTotalduration = (ploy_traj_opt_.max_forward_vel / ploy_traj_opt_.max_forward_acc + dis / ploy_traj_opt_.max_forward_vel);
+      new_acc = ploy_traj_opt_->max_forward_acc;
+      acc_t  = ploy_traj_opt_->max_forward_vel / new_acc;
+      if(pow(ploy_traj_opt_->max_forward_vel, 2) / ploy_traj_opt_->max_forward_acc < dis) {
+        initTotalduration = (ploy_traj_opt_->max_forward_vel / ploy_traj_opt_->max_forward_acc + dis / ploy_traj_opt_->max_forward_vel);
       }
       else  {
-        initTotalduration =sqrt(dis / ploy_traj_opt_.max_forward_acc);
+        initTotalduration =sqrt(dis / ploy_traj_opt_->max_forward_acc);
+        acc_t = initTotalduration / 2;
       }
     }
     else {
-      new_acc = ploy_traj_opt_.max_backward_acc;
-      acc_t  = ploy_traj_opt_.max_backward_vel / new_acc;
-     if(pow(ploy_traj_opt_.max_backward_vel, 2) / ploy_traj_opt_.max_backward_acc < dis) {
-        initTotalduration = (ploy_traj_opt_.max_backward_vel / ploy_traj_opt_.max_backward_acc + dis / ploy_traj_opt_.max_backward_vel);        
+      new_acc = ploy_traj_opt_->max_backward_acc;
+      acc_t  = ploy_traj_opt_->max_backward_vel / new_acc;
+     if(pow(ploy_traj_opt_->max_backward_vel, 2) / ploy_traj_opt_->max_backward_acc < dis) {
+        initTotalduration = (ploy_traj_opt_->max_backward_vel / ploy_traj_opt_->max_backward_acc + dis / ploy_traj_opt_->max_backward_vel);        
       }
       else  {
-        initTotalduration =sqrt(dis / ploy_traj_opt_.max_backward_acc);
+        initTotalduration =sqrt(dis / ploy_traj_opt_->max_backward_acc);
+        acc_t = initTotalduration / 2;
       }
     }
 
@@ -231,7 +232,7 @@ bool TrajPlanner::RunGlobalOpt(vector<Vector2d>& raw_pt) {
         resolution = traj_res;
       }
       for(int k = 0; k <= resolution; k++){
-        double t = basetime+res_time + 1.0*k/resolution*ego_piece_dur_vec[i];
+        double t = basetime+res_time + 1.0*k/resolution*ego_piece_dur_vec[j];
         Eigen::Vector3d pos;
         //根据时间计算pos：x\y\theta
         double cur_s;
@@ -246,27 +247,26 @@ bool TrajPlanner::RunGlobalOpt(vector<Vector2d>& raw_pt) {
             cur_s = dis - 0.5 * new_acc *(initTotalduration -  t) * (initTotalduration -  t);
           }
           else {
-            cur_s = 0.5 * new_acc * acc_t * acc _t + acc_t * new_acc * t;
+            cur_s = 0.5 * new_acc * acc_t * acc_t + acc_t * new_acc * (t - acc_t);
           }
         }
+        ROS_WARN("dis: %f, t: %f, cur_s:%f", dis, t, cur_s);
         Vector2d posx = sx.CalPosition(cur_s);
         Vector2d posy = sy.CalPosition(cur_s);
         pos << posx(0), posy(0), atan2(posy(1) / posx(1), 1);
         statelist.push_back(pos);
-        if(k==resolution && i!=piece_nums-1){
-          ego_innerPs.col(i) = pos.head(2); 
+        if(k==resolution && j!=piece_nums-1){
+          ego_innerPs.col(j) = pos.head(2); 
         }
       } 
-      res_time += ego_piece_dur_vec[i];
+      res_time += ego_piece_dur_vec[j];
     }
     // std::cout<<"s: "<<kino_traj.singul<<"\n";
-    double tm1 = ros::Time::now().toSec();
+    // double tm1 = ros::Time::now().toSec();
     getRectangleConst(statelist);
     sfc_container.push_back(hPolys_);
     display_hPolys_.insert(display_hPolys_.end(),hPolys_.begin(),hPolys_.end());
     waypoints_container.push_back(ego_innerPs);
-    iniState_container.push_back(kino_traj.start_state);
-    finState_container.push_back(kino_traj.final_state);
     basetime += initTotalduration;
   }
 
@@ -283,13 +283,14 @@ bool TrajPlanner::RunGlobalOpt(vector<Vector2d>& raw_pt) {
   if (flag_success)
   {
       std::cout << "[PolyTrajManager] Planning success ! " << std::endl;
-      for(unsigned int i = 0; i < kino_trajs_.size(); i++){
+      for(unsigned int i = 0; i < index_corner.size() - 1; i++){
         std::cout<<"init duration: "<<duration_container[i]<<std::endl;
         std::cout<<"pieceNum: " << waypoints_container[i].cols() + 1 <<std::endl;
         std::cout<<"optimized total duration: "<<(*ploy_traj_opt_->getMinJerkOptPtr())[i].getTraj(1).getTotalDuration()<<std::endl;
-        std::cout<<"optimized jerk cost: "<<(*ploy_traj_opt_->getMinJerkOptPtr())[i].getTrajJerkCost()<<std::endl;
+        std::cout<<"optimized jerk cost: "<<(*ploy_traj_opt_->getMinJerkOptPtr())[i].getTrajJerkCost(1)<<std::endl;
         // worldtime = traj_container_.singul_traj.back().end_time;
       }
+      ploy_traj_opt_->GetResult(0.1, refline);
   }
   else{
       ROS_WARN("[PolyTrajManager] Planning fails! ");

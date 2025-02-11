@@ -111,11 +111,11 @@ class CubicSpline1D {
             }
         }
 
-        Vector2d CalPosition(const double & x) {
-            Vector2d pos;
+        Eigen::Vector2d CalPosition(const double & x) {
+            Eigen::Vector2d pos;
             if (x < x_[0] || x > x_[x_.size() - 1]) {
                 std::cout << "ERROR: x is outside the data point's x range." << std::endl;
-                return;
+                return Eigen::Vector2d(-1,-1);
             }
 
             int index = 0;
@@ -129,6 +129,7 @@ class CubicSpline1D {
             double dposition =b_[index] + 2 * c_[index] * dx + 3 * d_[index] * std::pow(dx, 2);
 
             pos  << position, dposition;
+            return pos;
         }
 
         void Reset() {};

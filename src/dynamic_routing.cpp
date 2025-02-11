@@ -159,17 +159,22 @@ void Dynamic_routing::thread_routing(void)
   
       // 关闭文件流
       inFile.close();
-      CoarsePathGenerator spiral_smoother(config_);
-      int res = spiral_smoother.SmoothStandAlone(raw_points_, &refline.theta, &refline.kappa,
-                                                &refline.dkappa, &refline.s, &refline.x, &refline.y);
-      cout << "solve finished" << endl;
-      refline.generateAllS();
-      std::vector<GlobalPathPoint> smoothed_point2d = spiral_smoother.Interpolate(refline.theta, refline.kappa, refline.dkappa, refline.s, refline.x, refline.y, config_.resolution); //插值函数，对refline采样，便于可视化
-      // std::vector<GlobalPathPoint> smoothed_point2d;
-      // for(int i = 0; i < refline.x.size(); ++i) {
-      //   smoothed_point2d.push_back(GlobalPathPoint(refline.theta[i], refline.kappa[i], refline.dkappa[i], refline.s[i], refline.x[i], refline.y[i]));
-      // }
-      // cout << "行香蕉" <<  smoothed_point2d[smoothed_point2d.size() - 1].theta << endl;
+      //螺旋曲线优化
+      // CoarsePathGenerator spiral_smoother(config_);
+      // int res = spiral_smoother.SmoothStandAlone(raw_points_, &refline.theta, &refline.kappa,
+      //                                           &refline.dkappa, &refline.s, &refline.x, &refline.y);
+      // cout << "solve finished" << endl;
+      // refline.generateAllS();
+      // std::vector<GlobalPathPoint> smoothed_point2d = spiral_smoother.Interpolate(refline.theta, refline.kappa, refline.dkappa, refline.s, refline.x, refline.y, config_.resolution); //插值函数，对refline采样，便于可视化
+      
+      //df优化
+      TrajPlanner df_global_opt;
+      int res = df_global_opt.RunGlobalOpt(raw_points_, refline);
+      std::vector<GlobalPathPoint> smoothed_point2d;
+      for(int i = 0; i < refline.x.size(); ++i) {
+        smoothed_point2d.push_back(GlobalPathPoint(refline.theta[i], refline.kappa[i], refline.dkappa[i], refline.s[i], refline.x[i], refline.y[i]));
+      }
+     
       if (res > 0) {
         is_set_refline = true;
         publishPathMarker(smoothed_point2d);
@@ -210,19 +215,19 @@ void Dynamic_routing::thread_routing(void)
         }
         
         const vector<CartesianState> last_path = best_path;
-        DpPlanner dp_planner = DpPlanner(refline, init_car_state, obs, frame_count, best_path);
-        dp_planner.DynamicProgramming();
-        best_path = dp_planner.getBestPath();
-        ref_path = dp_planner.getRefPath();
-        ROS_WARN("finish dp planner");
+        // DpPlanner dp_planner = DpPlanner(refline, init_car_state, obs, frame_count, best_path);
+        // dp_planner.DynamicProgramming();
+        // best_path = dp_planner.getBestPath();
+        // ref_path = dp_planner.getRefPath();
+        // ROS_WARN("finish dp planner");
 
         // Mpc npmc_opt(frame_count);
         // npmc_opt.solve(init_car_state, ref_path, best_path, obs);
         // best_path = npmc_opt.getFinalPath();
 
-        altro::problems::VehicleProblem altro_problem(frame_count);
-        altro_problem.IterOpt(init_car_state, ref_path, best_path, obs);
-        best_path = altro_problem.getFinalPath();
+        // altro::problems::VehicleProblem altro_problem(frame_count);
+        // altro_problem.IterOpt(init_car_state, ref_path, best_path, obs);
+        // best_path = altro_problem.getFinalPath();
 
         // ROS_WARN("current frame_count: %d", frame_count);
         // TrajPlanner df_opt;
