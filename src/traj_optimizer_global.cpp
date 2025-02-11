@@ -38,7 +38,7 @@ namespace plan_manage {
         ROS_ERROR("There is only a piece?");
         return false;
       }
-      int piece_num_ = initInnerPts[i].cols() + 1; //尖点数量+1
+      int piece_num_ = initInnerPts[i].cols() + 1; //内部点的数量+1
       piece_num_container[i] = piece_num_;
       if(cfgHs_container[i].size()!=(piece_num_ - 2) * (traj_resolution_ + 1) + 2 * (destraj_resolution_ + 1)){
         std::cout<<"cfgHs size: "<<cfgHs_container[i].size()<<std::endl;
@@ -53,15 +53,18 @@ namespace plan_manage {
       //reset the start end max_vel_
       double max_vel,max_acc = 0.0;
       if(singuls[i] > 0){
+        // ROS_WARN("singul set 1");
         max_vel  = max_forward_vel;
         max_acc = max_forward_acc; 
       }
       else{
+        // ROS_WARN("singul set -1");
         max_vel = max_backward_vel;
         max_acc = max_backward_acc;
       }
-      ROS_WARN("singul set finished");
-
+      // ROS_WARN("singul set finished");
+      ROS_WARN("iniState_container: ");
+      ROS_WARN("%f", iniState_container[i].col(1).norm());
       if(iniState_container[i].col(1).norm()>=max_vel){
         iniState_container[i].col(1) = iniState_container[i].col(1).normalized()*(max_vel-1.0e-2);
       }
@@ -79,14 +82,14 @@ namespace plan_manage {
       
 
       jerkOpt_container[i].reset(piece_num_);
-      variable_num_ += 2 * (piece_num_ - 1); //尖点的xy
+      variable_num_ += 2 * (piece_num_ - 1); //内部点的xy
 
 
     }  
     ROS_WARN("piece set finished");
-    variable_num_ += trajnum;
-    variable_num_ += 2 * (trajnum-1);
-    variable_num_ += 1 * (trajnum-1); 
+    variable_num_ += trajnum; //每段的时间
+    variable_num_ += 2 * (trajnum-1);  //尖点的位置
+    variable_num_ += 1 * (trajnum-1);  //尖点的速度
     // variable_num_ += 2;
     //Waypoints + T + GearPosition + angle
     
@@ -130,7 +133,7 @@ namespace plan_manage {
     lbfgs_global::lbfgs_parameter_t lbfgs_params;
     lbfgs_params.mem_size = memsize;//128
     lbfgs_params.past = past; //3 
-    lbfgs_params.g_epsilon = 1e-3; //1.0e-16;
+    lbfgs_params.g_epsilon = 1e-16; //1.0e-16;
     lbfgs_params.min_step = 1.0e-32;
     lbfgs_params.delta = delta;
     lbfgs_params.max_iterations = 12000;

@@ -3,7 +3,12 @@
 
 #include <casadi/casadi.hpp>
 #include <iostream>
-#include "dp_planner.hpp"
+// #include "dp_planner.hpp"
+#include <ros/ros.h>
+#include <iostream>
+#include "DynamicPathStruct.hpp"
+#include "Obstacles.hpp"
+#include "CoarsePathGenerator.hpp"
 using namespace casadi;
 
 class Mpc

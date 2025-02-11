@@ -1,13 +1,17 @@
+#ifndef DP_ROUTING_H
+#define DP_ROUTING_H
+
 // #include <vector>
 #include <cmath>
 #include <memory>
-#include <ros/ros.h>
-#include <iostream>
-#include "DynamicPathStruct.hpp"
-#include "Obstacles.hpp"
-#include "CoarsePathGenerator.hpp"
+// #include <ros/ros.h>
+// #include <iostream>
+// #include "DynamicPathStruct.hpp"
+// #include "Obstacles.hpp"
+// #include "CoarsePathGenerator.hpp"
+// #include "df_planner/traj_optimizer_global.h"
+#include "df_planner/traj_manager.h"
 #include <chrono>
-
 class DpPlanner {
 public:
     DpPlanner(const GlobalPath& refline, const CartesianState& init_state, const Obstacles& obj, int count, const vector<CartesianState>& last_path) {
@@ -28,6 +32,7 @@ public:
     ~DpPlanner() {}
 
 private:
+    std::shared_ptr<plan_manage::PolyTrajOptimizer> df_refline_ = nullptr;
     GlobalPath refline_;
     vector<CartesianState> best_path_;
     vector<CartesianState> last_best_path_;
@@ -390,3 +395,5 @@ private:
         // The current formula is a simplified version for demonstration.
     }
 };
+
+#endif

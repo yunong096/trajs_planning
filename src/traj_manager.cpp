@@ -130,15 +130,14 @@ bool TrajPlanner::Run(
   return true; 
 }
 
-bool TrajPlanner::RunGlobalOpt(const vector<Vector2d>& raw_pt, GlobalPath& refline) {
+bool TrajPlanner::RunGlobalOpt(const vector<Vector2d>& raw_pt) {
   ploy_traj_opt_.reset(new PolyTrajOptimizer);
   ploy_traj_opt_->setParam();
 
   Eigen::VectorXd ego_piece_dur_vec;
   Eigen::MatrixXd ego_innerPs;
-  double basetime = 0.0;
+  double basetime = 0.0, worldtime =  0.0;
   double dense_traj_res = 32, traj_res = 16;
-  double worldtime =  0.0;
 
   /*try to merge optimization process*/
   std::vector<std::vector<Eigen::MatrixXd>> sfc_container;
@@ -166,8 +165,8 @@ bool TrajPlanner::RunGlobalOpt(const vector<Vector2d>& raw_pt, GlobalPath& refli
         ROS_WARN("DF planner illeal Input");
         return false;
     }
-    singul_container.push_back( i % 2);
-    trajs.singul = i % 2;
+    trajs.singul =  i % 2 == 0 ? 1 : -1;
+    singul_container.push_back(trajs.singul);
     int piece_nums;
     double initTotalduration = 0.0;
     // 三次样条拟合
@@ -267,7 +266,9 @@ bool TrajPlanner::RunGlobalOpt(const vector<Vector2d>& raw_pt, GlobalPath& refli
     sfc_container.push_back(hPolys_);
     display_hPolys_.insert(display_hPolys_.end(),hPolys_.begin(),hPolys_.end());
     waypoints_container.push_back(ego_innerPs);
-    basetime += initTotalduration;
+    iniState_container.push_back(trajs.start_state);
+    finState_container.push_back(trajs.final_state);
+    // basetime += initTotalduration;
   }
 
   double t1= ros::Time::now().toSec();
@@ -290,7 +291,7 @@ bool TrajPlanner::RunGlobalOpt(const vector<Vector2d>& raw_pt, GlobalPath& refli
         std::cout<<"optimized jerk cost: "<<(*ploy_traj_opt_->getMinJerkOptPtr())[i].getTrajJerkCost(1)<<std::endl;
         // worldtime = traj_container_.singul_traj.back().end_time;
       }
-      ploy_traj_opt_->GetResult(0.1, refline);
+      // ploy_traj_opt_->GetResult(0.1, refline);
   }
   else{
       ROS_WARN("[PolyTrajManager] Planning fails! ");

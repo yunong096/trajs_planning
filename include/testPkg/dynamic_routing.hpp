@@ -20,9 +20,9 @@
 #include <waypoint_msgs/WaypointArray.h>
 // #include "Obstacles.hpp"
 // #include "CoarsePathGenerator.hpp"
-// #include "dp_planner.hpp"
+#include "dp_planner.hpp"
 // #include "nmpc2.hpp"
-#include "df_planner/traj_manager.h"
+// #include "df_planner/traj_manager.h"
 // #include "altro_optimizer.hpp"
 
 
@@ -39,6 +39,8 @@ public:
   void control_call_back(const geometry_msgs::Vector3 &msg);
   void start_pose_call_backs(const geometry_msgs::Vector3 &msg);
   void goal_pose_call_backs(const geometry_msgs::Vector3 &msg);
+  std::shared_ptr<PolyTrajOptimizer> df_opt_;
+
 private:
   bool is_set_start, is_set_goal, is_set_refline;
   bool is_reach_goal = false;

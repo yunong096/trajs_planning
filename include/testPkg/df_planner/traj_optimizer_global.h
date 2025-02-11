@@ -271,6 +271,7 @@ namespace plan_manage {
     }
 
     void GetResult(double gap, GlobalPath& refline) {
+      // ROS_WARN("start to getRes");
       refline = GlobalPath();
       // 优化结果密集采样输出
       for(auto& jerkOpt : jerkOpt_container) {
@@ -290,6 +291,7 @@ namespace plan_manage {
             // cout << "df_state: " << state.x << ", " << state.y << ", " << state.speed << ", " << state.theta << ", " << state.acc << ", " << state.kappa << endl;
         }
       }
+      ROS_WARN("finish to getRes");
     }
 
   };

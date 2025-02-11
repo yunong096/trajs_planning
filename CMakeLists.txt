@@ -150,6 +150,7 @@ catkin_package(
 include_directories(
 # include
   ${catkin_INCLUDE_DIRS}
+  ${fmt_INCLUDE_DIRS}
   # ${Eigen_INCLUDE_DIRS}
   /home/lynnn/test_ws/src/testPkg/include/testPkg
   /home/lynnn/test_ws/src/testPkg/include

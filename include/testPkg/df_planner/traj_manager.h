@@ -28,7 +28,7 @@ class TrajPlanner {
     const vector<CartesianState>& last_path, 
     vector<CartesianState>& final_result);
 
-  bool RunGlobalOpt(const vector<Vector2d>& raw_pt, GlobalPath& refline);
+  bool RunGlobalOpt(const vector<Vector2d>& raw_pt);
 
   bool CalKeyPoint(const vector<CartesianState>& source_path,
                               traj_utils::FlatTrajData* trajs, double duration);
@@ -38,6 +38,7 @@ class TrajPlanner {
   void GetFlatState(const Eigen::Vector4d& state,
                     const Eigen::Vector2d& control_input,
                     Eigen::MatrixXd& flat_state);
+    void getPolyTrajOpt(std::shared_ptr<PolyTrajOptimizer>& a){a = std::move(ploy_traj_opt_);};
 
  private:
   double end_curvature_ = 0.0;
@@ -48,6 +49,7 @@ class TrajPlanner {
   double kLbCollisionBuffur_ = 0.0; //0.15;
   bool is_debug_mode_ = false;
   bool need_extra_rb_buffer_ = false;
+
   std::vector<Eigen::MatrixXd> hPolys_, display_hPolys_;
     
     Obstacles obs_;
@@ -387,6 +389,8 @@ class TrajPlanner {
         else if (x >= 76.7 && x <= 138.5 && y >= 43.1 && y <= 50.2)
             return false;
         else if (x >= 99.3 && x <= 101.9 && y >= 50.2 && y <= 55.9)
+            return false;
+        else if (x >= 0 && x <= 7.7 && y >= 61.3 && y <=80)
             return false;
         return true;
     }

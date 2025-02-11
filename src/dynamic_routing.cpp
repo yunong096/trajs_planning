@@ -130,7 +130,7 @@ void Dynamic_routing::thread_routing(void)
       config_.resolution = 0.1;
 
       // 打开输入文件流
-      std::ifstream inFile("/home/lynnn/test_ws/globalpoints_data.txt");
+      std::ifstream inFile("/home/lynnn/test_ws/globalpoints_data3.txt");
   
       // 检查文件是否成功打开
       if (!inFile) {
@@ -169,15 +169,22 @@ void Dynamic_routing::thread_routing(void)
       
       //df优化
       TrajPlanner df_global_opt;
-      int res = df_global_opt.RunGlobalOpt(raw_points_, refline);
+      int res = df_global_opt.RunGlobalOpt(raw_points_);
+      // PolyTrajOptimizer::Ptr Dynamic_routing::df_opt_ = nullptr;
+      df_global_opt.getPolyTrajOpt(df_opt_);
+      df_opt_->GetResult(0.1, refline);
       std::vector<GlobalPathPoint> smoothed_point2d;
       for(int i = 0; i < refline.x.size(); ++i) {
-        smoothed_point2d.push_back(GlobalPathPoint(refline.theta[i], refline.kappa[i], refline.dkappa[i], refline.s[i], refline.x[i], refline.y[i]));
+        // smoothed_point2d.push_back(GlobalPathPoint(refline.theta[i], refline.kappa[i], refline.dkappa[i], refline.s[i], refline.x[i], refline.y[i]));
+        smoothed_point2d.push_back(GlobalPathPoint(refline.theta[i], refline.kappa[i], 0, 0, refline.x[i], refline.y[i]));
       }
      
       if (res > 0) {
         is_set_refline = true;
+        ROS_WARN("global success!");
         publishPathMarker(smoothed_point2d);
+        goal_pose_.x = (*df_opt_->getMinJerkOptPtr())[0].getTailX();
+        goal_pose_.y = (*df_opt_->getMinJerkOptPtr())[0].getTailY();
       }
     }
 
