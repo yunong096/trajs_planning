@@ -99,7 +99,8 @@ namespace plan_manage {
     void setDroneId(const int drone_id);
 
     /* helper functions */
-    inline const std::vector<traj_utils::MinJerkOpt> *getMinJerkOptPtr(void) { return &jerkOpt_container; }
+    // inline const std::vector<traj_utils::MinJerkOpt> *getMinJerkOptPtr(void) { return &jerkOpt_container; }
+    inline std::vector<traj_utils::MinJerkOpt> *getMinJerkOptPtr(void) { return &jerkOpt_container; }
     inline int get_traj_resolution_() { return traj_resolution_; };
     inline int get_destraj_resolution_() { return destraj_resolution_; };
     inline double getsurroundClearance(void) { return surround_clearance_; }

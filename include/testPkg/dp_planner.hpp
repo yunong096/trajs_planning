@@ -14,11 +14,25 @@
 #include <chrono>
 class DpPlanner {
 public:
-    DpPlanner(const GlobalPath& refline, const CartesianState& init_state, const Obstacles& obj, int count, const vector<CartesianState>& last_path) {
+    DpPlanner(const bool is_using_global_df, const GlobalPath& refline, const CartesianState& init_state, const Obstacles& obj, int count, const vector<CartesianState>& last_path) {
         last_best_path_ = last_path;
         frame_count = count;
         refline_ = refline;
         obj_ = obj;
+        is_using_global_df_ = is_using_global_df;
+        ROS_WARN("current_state: %f, %f, %f, %f, %f, %f", init_state.x, init_state.y, init_state.theta, init_state.speed, init_state.acc, init_state.kappa);
+        CarToFrenet(init_state, init_sl_state_);
+        ROS_WARN("current_frenet_state:  s--%f,  l--%f,  ds--%f,  dds--%f", init_sl_state_.s, init_sl_state_.l, init_sl_state_.ds, init_sl_state_.dds);
+        Initialize();
+        // GenerateSLTrange();
+    }
+
+    DpPlanner(const bool is_using_global_df, std::shared_ptr<plan_manage::PolyTrajOptimizer> df_refline, const CartesianState& init_state, const Obstacles& obj, int count, const vector<CartesianState>& last_path) {
+        last_best_path_ = last_path;
+        frame_count = count;
+        df_refline_ = df_refline;
+        obj_ = obj;
+        is_using_global_df_ = is_using_global_df;
         ROS_WARN("current_state: %f, %f, %f, %f, %f, %f", init_state.x, init_state.y, init_state.theta, init_state.speed, init_state.acc, init_state.kappa);
         CarToFrenet(init_state, init_sl_state_);
         ROS_WARN("current_frenet_state:  s--%f,  l--%f,  ds--%f,  dds--%f", init_sl_state_.s, init_sl_state_.l, init_sl_state_.ds, init_sl_state_.dds);
@@ -32,6 +46,7 @@ public:
     ~DpPlanner() {}
 
 private:
+    bool is_using_global_df_ = false;
     std::shared_ptr<plan_manage::PolyTrajOptimizer> df_refline_ = nullptr;
     GlobalPath refline_;
     vector<CartesianState> best_path_;

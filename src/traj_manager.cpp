@@ -249,7 +249,7 @@ bool TrajPlanner::RunGlobalOpt(const vector<Vector2d>& raw_pt) {
             cur_s = 0.5 * new_acc * acc_t * acc_t + acc_t * new_acc * (t - acc_t);
           }
         }
-        ROS_WARN("dis: %f, t: %f, cur_s:%f", dis, t, cur_s);
+        // ROS_WARN("dis: %f, t: %f, cur_s:%f", dis, t, cur_s);
         Vector2d posx = sx.CalPosition(cur_s);
         Vector2d posy = sy.CalPosition(cur_s);
         pos << posx(0), posy(0), atan2(posy(1) / posx(1), 1);

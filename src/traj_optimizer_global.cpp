@@ -63,8 +63,8 @@ namespace plan_manage {
         max_acc = max_backward_acc;
       }
       // ROS_WARN("singul set finished");
-      ROS_WARN("iniState_container: ");
-      ROS_WARN("%f", iniState_container[i].col(1).norm());
+      // ROS_WARN("iniState_container: ");
+      // ROS_WARN("%f", iniState_container[i].col(1).norm());
       if(iniState_container[i].col(1).norm()>=max_vel){
         iniState_container[i].col(1) = iniState_container[i].col(1).normalized()*(max_vel-1.0e-2);
       }

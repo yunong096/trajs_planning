@@ -7,6 +7,7 @@
 geometry_msgs::Vector3 start_pose_;   // 起点
 geometry_msgs::Vector3 goal_pose_;    // 终点
 const std::string Frame_id = "map"; //参考系的定义
+bool IS_USING_DF_GLOBAL_PLANNER = true; //false
 
 /*定义起点位置*/
 void Dynamic_routing::start_pose_call_backs(const geometry_msgs::Vector3 &msg)
@@ -131,6 +132,8 @@ void Dynamic_routing::thread_routing(void)
 
       // 打开输入文件流
       std::ifstream inFile("/home/lynnn/test_ws/globalpoints_data3.txt");
+      if(!IS_USING_DF_GLOBAL_PLANNER) 
+        inFile =  std::ifstream("/home/lynnn/test_ws/globalpoints_data.txt");
   
       // 检查文件是否成功打开
       if (!inFile) {
@@ -159,32 +162,46 @@ void Dynamic_routing::thread_routing(void)
   
       // 关闭文件流
       inFile.close();
-      //螺旋曲线优化
-      // CoarsePathGenerator spiral_smoother(config_);
-      // int res = spiral_smoother.SmoothStandAlone(raw_points_, &refline.theta, &refline.kappa,
-      //                                           &refline.dkappa, &refline.s, &refline.x, &refline.y);
-      // cout << "solve finished" << endl;
-      // refline.generateAllS();
-      // std::vector<GlobalPathPoint> smoothed_point2d = spiral_smoother.Interpolate(refline.theta, refline.kappa, refline.dkappa, refline.s, refline.x, refline.y, config_.resolution); //插值函数，对refline采样，便于可视化
-      
-      //df优化
-      TrajPlanner df_global_opt;
-      int res = df_global_opt.RunGlobalOpt(raw_points_);
-      // PolyTrajOptimizer::Ptr Dynamic_routing::df_opt_ = nullptr;
-      df_global_opt.getPolyTrajOpt(df_opt_);
-      df_opt_->GetResult(0.1, refline);
-      std::vector<GlobalPathPoint> smoothed_point2d;
-      for(int i = 0; i < refline.x.size(); ++i) {
-        // smoothed_point2d.push_back(GlobalPathPoint(refline.theta[i], refline.kappa[i], refline.dkappa[i], refline.s[i], refline.x[i], refline.y[i]));
-        smoothed_point2d.push_back(GlobalPathPoint(refline.theta[i], refline.kappa[i], 0, 0, refline.x[i], refline.y[i]));
+
+      if(!IS_USING_DF_GLOBAL_PLANNER) {
+        //螺旋曲线优化
+        CoarsePathGenerator spiral_smoother(config_);
+        int res = spiral_smoother.SmoothStandAlone(raw_points_, &refline.theta, &refline.kappa,
+                                                  &refline.dkappa, &refline.s, &refline.x, &refline.y);
+        cout << "spiral_smoother solve finished" << endl;
+        refline.generateAllS();
+        std::vector<GlobalPathPoint> smoothed_point2d = spiral_smoother.Interpolate(refline.theta, refline.kappa, refline.dkappa, refline.s, refline.x, refline.y, config_.resolution); //插值函数，对refline采样，便于可视化
+        if (res > 0) {
+          is_set_refline = true;
+          ROS_WARN("global success!");
+          publishPathMarker(smoothed_point2d);
+        }
       }
-     
-      if (res > 0) {
-        is_set_refline = true;
-        ROS_WARN("global success!");
-        publishPathMarker(smoothed_point2d);
-        goal_pose_.x = (*df_opt_->getMinJerkOptPtr())[0].getTailX();
-        goal_pose_.y = (*df_opt_->getMinJerkOptPtr())[0].getTailY();
+      else {
+        //df优化
+        TrajPlanner df_global_opt;
+        int res = df_global_opt.RunGlobalOpt(raw_points_);
+        // PolyTrajOptimizer::Ptr Dynamic_routing::df_opt_ = nullptr;
+        df_global_opt.getPolyTrajOpt(df_opt_);
+        df_opt_->GetResult(0.1, refline);
+        std::vector<GlobalPathPoint> smoothed_point2d;
+        for(int i = 0; i < refline.x.size(); ++i) {
+          // smoothed_point2d.push_back(GlobalPathPoint(refline.theta[i], refline.kappa[i], refline.dkappa[i], refline.s[i], refline.x[i], refline.y[i]));
+          smoothed_point2d.push_back(GlobalPathPoint(refline.theta[i], refline.kappa[i], 0, 0, refline.x[i], refline.y[i]));
+        }
+        if (res > 0) {
+          is_set_refline = true;
+          ROS_WARN("global success!");
+          publishPathMarker(smoothed_point2d);
+          goal_pose_.x = (*df_opt_->getMinJerkOptPtr())[0].getTailX();
+          goal_pose_.y = (*df_opt_->getMinJerkOptPtr())[0].getTailY();
+          goal_pose_.z = (*df_opt_->getMinJerkOptPtr())[0].getTailTheta();
+          cout << "df replan goal pose: " << goal_pose_.x << ", " << goal_pose_.y << ", " << goal_pose_.z << endl;
+          // cout << "test equal: " << (*df_opt_->getMinJerkOptPtr())[1].getHeadX() << ", " << (*df_opt_->getMinJerkOptPtr())[1].getHeadY() << ", " << (*df_opt_->getMinJerkOptPtr())[1].getHeadTheta() << endl;
+
+          //在opt中存储s
+          (*df_opt_->getMinJerkOptPtr())[0].getTraj(1).setPiece_S();
+        }
       }
     }
 
@@ -222,12 +239,20 @@ void Dynamic_routing::thread_routing(void)
         }
         
         const vector<CartesianState> last_path = best_path;
-        // DpPlanner dp_planner = DpPlanner(refline, init_car_state, obs, frame_count, best_path);
-        // dp_planner.DynamicProgramming();
-        // best_path = dp_planner.getBestPath();
-        // ref_path = dp_planner.getRefPath();
-        // ROS_WARN("finish dp planner");
-
+        if(!IS_USING_DF_GLOBAL_PLANNER) {
+          DpPlanner dp_planner = DpPlanner(IS_USING_DF_GLOBAL_PLANNER, refline, init_car_state, obs, frame_count, best_path);
+          dp_planner.DynamicProgramming();
+          best_path = dp_planner.getBestPath();
+          ref_path = dp_planner.getRefPath();
+          ROS_WARN("finish dp planner");
+        }
+        else {
+          // DpPlanner dp_planner = DpPlanner(IS_USING_DF_GLOBAL_PLANNER, refline, init_car_state, obs, frame_count, best_path);
+          // dp_planner.DynamicProgramming();
+          // best_path = dp_planner.getBestPath();
+          // ref_path = dp_planner.getRefPath();
+          // ROS_WARN("finish dp planner");
+        }
         // Mpc npmc_opt(frame_count);
         // npmc_opt.solve(init_car_state, ref_path, best_path, obs);
         // best_path = npmc_opt.getFinalPath();
@@ -244,8 +269,8 @@ void Dynamic_routing::thread_routing(void)
         //   best_path = new_path;
         // }
 
-        if(frame_count > 0)
-          is_reach_goal = true; //单帧测试用
+        // if(frame_count > 0)
+        //   is_reach_goal = true; //单帧测试用
 
         ROS_WARN("finish dynamic planner");
         // 获取结束时间点

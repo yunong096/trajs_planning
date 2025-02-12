@@ -108,6 +108,16 @@ class Piece {
     return pos;
   }
 
+  // Eigen::Vector2d getDerivative(const double t) const {
+  //   Eigen::Vector2d dpos(0.0, 0.0);
+  //   double tn = 1.0;
+  //   for (int i = order - 1; i >= 0; --i) {
+  //     dpos += tn * coeffMat.col(i) * (order - i);
+  //     tn *= t;
+  //   }
+  //   return dpos;
+  // }
+
   Eigen::Matrix2d getR(const double t) const {
     Eigen::Vector2d current_v = getdSigma(t);
     Eigen::Matrix2d rotation_matrix;
@@ -217,6 +227,30 @@ class Piece {
     }
   }
 
+  void getState(const double relative_t, GlobalPathPoint& res) const {
+    const auto pos = getPos(relative_t);
+    res.x = pos[0];
+    res.y = pos[1];
+    Eigen::Vector2d dsigma = getdSigma(relative_t);
+    Eigen::Vector2d ddsigma = getddSigma(relative_t);
+    Eigen::Vector2d dddsigma = getdddSigma(relative_t);
+    const double dsigma_norm = dsigma.norm();
+    res.theta= (std::atan2(singul * dsigma(1), singul * dsigma(0)));
+    if (dsigma_norm < plan_manage::kEpsilon) {
+      res.kappa = (0.0);
+      res.dkappa = (0.0);
+    } else {
+      res.kappa = singul *
+                         (dsigma(0) * ddsigma(1) - dsigma(1) * ddsigma(0)) /
+                         (dsigma_norm * dsigma_norm * dsigma_norm);
+      res.kappa = singul *(
+                              (dsigma_norm * dsigma_norm * dsigma_norm) * (ddsigma(0) * ddsigma(1) + dsigma(0) * dddsigma(1) - ddsigma(1) /(ddsigma(0) * dsigma(1) * dddsigma(0))) 
+                              + 
+                              (dsigma(0) * ddsigma(1) - dsigma(1) * ddsigma(0)) * (-3/2) * pow(dsigma_norm, -5) * 2 * (dsigma(1) * ddsigma(1) + dsigma(0) * ddsigma(0)) 
+                                );
+    }
+  }
+
   void pushState(const double relative_t, GlobalPath& refline) const {
     const auto pos = getPos(relative_t);
     refline.x.emplace_back(pos[0]);
@@ -322,6 +356,40 @@ class Trajectory {
     }
   }
 
+  std::vector<double> Pieces_S;
+  void setPiece_S() {
+    int N = pieces.size();
+    Pieces_S = vector<double>(N, 0);
+    for(int i = 0; i < N; ++i) {
+      double piece_t = pieces[i].getDuration();
+      Pieces_S[i] = computeArcLength(i, 0.0, piece_t);
+    }
+  }
+
+  double computeArcLength(double piece_idx, double t_start, double t_end, int steps = 1000) const {
+        double length = 0.0;
+        double dt = (t_end - t_start) / steps;
+        for (int i = 0; i < steps; ++i) {
+            double t = t_start + i * dt;
+            auto dpos = pieces[piece_idx].getdSigma(t);
+            length += std::hypot(dpos(0), dpos(1)) * dt;
+        }
+        return length;
+    }
+
+    // 在段内通过二分法求解t
+    double findTInSegment(const int piece_idx, double s_local, double eps = 1e-6) const {
+        double low = 0.0, high = pieces[piece_idx].getDuration();
+        while (high - low > eps) {
+            double mid = (low + high) / 2;
+            double len = computeArcLength(piece_idx, 0, mid);
+            (len < s_local) ? low = mid : high = mid;
+        }
+        return (low + high) / 2;
+    }
+
+    
+  
   inline int getPieceNum() const { return pieces.size(); }
 
   Eigen::VectorXd getDurations() const {
@@ -332,6 +400,8 @@ class Trajectory {
     }
     return durations;
   }
+
+  
 
   double getTotalDuration() const {
     int N = getPieceNum();
@@ -623,6 +693,30 @@ class MinJerkOpt {
   Eigen::MatrixXd gdP;
 
  public:
+  double getHeadX() const{
+    double res = headPVA(0, 0);
+    return res;
+  }
+  double getHeadY() const {
+    double res = headPVA(1, 0);
+    return res;
+  } 
+  double getHeadTheta() const {
+    double res =  atan2(headPVA(1, 1), headPVA(0, 1));
+    return res;
+  }
+  double getTailX() const{
+    double res = tailPVA(0, 0);
+    return res;
+  }
+  double getTailY() const {
+    double res = tailPVA(1, 0);
+    return res;
+  } 
+  double getTailTheta() const {
+    double res =  atan2(tailPVA(1, 1), tailPVA(0, 1));
+    return res;
+  }
   void reset(const int pieceNum) {
     N = pieceNum;
     A.create(6 * N, 6, 6);
