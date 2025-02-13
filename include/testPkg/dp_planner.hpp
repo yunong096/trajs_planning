@@ -27,10 +27,13 @@ public:
         // GenerateSLTrange();
     }
 
-    DpPlanner(const bool is_using_global_df, std::shared_ptr<plan_manage::PolyTrajOptimizer> df_refline, const CartesianState& init_state, const Obstacles& obj, int count, const vector<CartesianState>& last_path) {
+    DpPlanner(const bool is_using_global_df, std::shared_ptr<plan_manage::PolyTrajOptimizer> df_refline,  const traj_utils::Trajectory traj,const CartesianState& init_state, const Obstacles& obj, int count, const vector<CartesianState>& last_path) {
         last_best_path_ = last_path;
         frame_count = count;
         df_refline_ = df_refline;
+        // traj_ =  (*df_refline_->getMinJerkOptPtr())[0].getTraj(1);
+        // traj_.setPiece_S();
+        traj_ = traj;
         obj_ = obj;
         is_using_global_df_ = is_using_global_df;
         ROS_WARN("current_state: %f, %f, %f, %f, %f, %f", init_state.x, init_state.y, init_state.theta, init_state.speed, init_state.acc, init_state.kappa);
@@ -48,6 +51,7 @@ public:
 private:
     bool is_using_global_df_ = false;
     std::shared_ptr<plan_manage::PolyTrajOptimizer> df_refline_ = nullptr;
+    traj_utils::Trajectory traj_;
     GlobalPath refline_;
     vector<CartesianState> best_path_;
     vector<CartesianState> last_best_path_;
@@ -64,6 +68,22 @@ private:
 
     // Conversion functions
     void CarToFrenet(const CartesianState& car_state, FrenetState& fre_state) {
+        // ROS_WARN("enter cartofrenet 0");
+        auto start_time = std::chrono::high_resolution_clock::now();
+        
+        if (!is_using_global_df_)
+            CarToFrenet1(car_state, fre_state);
+        else 
+            CarToFrenet2(car_state, fre_state);
+
+        auto end_time = std::chrono::high_resolution_clock::now();
+        // 计算时间间隔
+        std::chrono::duration<double> elapsed_seconds = end_time - start_time;
+        // 输出时间间隔
+        std::cout << "CarToFrenet时间: " << elapsed_seconds.count() << " 秒" << std::endl;
+    }
+
+    void CarToFrenet1(const CartesianState& car_state, FrenetState& fre_state) {
         //找最近点
         GlobalPathPoint ref_state = GlobalPathPoint{0, 0, 0, 0, 0, 0};
         double min_dist = std::numeric_limits<double>::infinity();
@@ -115,26 +135,111 @@ private:
         // ROS_WARN("init_sl_finished");
         // ROS_WARN("s:%f, l:%f, ds:%f, dds:%f, dl:%f, ddl:%f", fre_state.s, fre_state.l, fre_state.ds, fre_state.dds, fre_state.dl, fre_state.ddl);
     }
-    
-    void FrenetToCar(const FrenetState& fre_state, CartesianState& car_state) {
-        //这里将refline上的参考点也保存下来用于构造后续优化的目标函数，直接对best_path_ref进行插值，之后如果在别的地方调用这个函数会出问题
-        GlobalPathPoint ref_state{0, 0, 0, 0, 0, 0};
-        int first_ind = -1;
-        for(int i = 1; i < refline_.x.size(); ++i) {
-            if (refline_.all_s[i] > fre_state.s) {
-                first_ind = i - 1;
-                // cout << "first_ind: " << first_ind << endl;
-                break;
+
+    void CarToFrenet2(const CartesianState& car_state, FrenetState& fre_state) {
+        // ROS_WARN("enter cartofrenet 2");
+        //找最近点
+        Vector2d cur_pos(car_state.x, car_state.y);
+        if(df_refline_ == nullptr) ROS_ERROR("df refline is null");
+        GlobalPathPoint ref_state = GlobalPathPoint{0, 0, 0, 0, 0, 0};
+        MatrixXd pos_matrix= traj_.getPositions();
+        double min_dist = hypot(car_state.x - (*df_refline_->getMinJerkOptPtr())[0].getHeadX(), car_state.y - car_state.x - (*df_refline_->getMinJerkOptPtr())[0].getHeadY());
+        int min_ind = 0;
+        for(int i = 1; i < pos_matrix.cols() + 1; ++i) {
+            double dx = car_state.x - pos_matrix(0, i - 1);
+            double dy = car_state.y - pos_matrix(1, i - 1);
+            double dist = hypot(dx, dy);
+            if (dist < min_dist) {
+                min_dist = dist;
+                min_ind = i;
             }
         }
-        // cout << "first_ind: " << first_ind << endl;
-        if(first_ind != -1) {
-            ref_state = CoarsePathGenerator::FindRefPt(refline_.x[first_ind], refline_.y[first_ind], refline_.all_s[first_ind],
-                                                                                                        refline_.theta[first_ind], refline_.kappa[first_ind], refline_.dkappa[first_ind],
-                                                                                                        refline_.theta[first_ind + 1], refline_.kappa[first_ind + 1], refline_.dkappa[first_ind + 1],
-                                                                                                        refline_.s[first_ind], fre_state.s);    
-        }else {
-            ref_state = GlobalPathPoint{refline_.theta[refline_.x.size() - 1], refline_.kappa[refline_.x.size() - 1], refline_.dkappa[refline_.x.size() - 1], refline_.all_s[refline_.x.size() - 1], refline_.x[refline_.x.size() - 1], refline_.y[refline_.x.size() - 1]};
+        // cout << "min_ind: " << min_ind << ", min_dist: " << min_dist << endl;
+
+        if(min_ind > 0 && min_ind < pos_matrix.cols()) {
+            // ROS_WARN("enter inner");
+            double t = traj_.getDurations()[min_ind - 1];
+            Vector2d min_res = traj_.findMinPtInSegment(min_ind - 1, cur_pos, t);
+            if (min_res(1) < min_dist) //最近点在该段上且不是端点
+                ref_state = traj_.getState(min_res(1), min_ind - 1);
+            else {
+                min_res = traj_.findMinPtInSegment(min_ind, cur_pos, 0.0);
+                ref_state = traj_.getState(min_res(1), min_ind);
+            }
+            // cout << "min_dis: " <<min_res(1) << endl;
+        } 
+        else if (min_ind == 0) {
+            // ROS_WARN("enter start");
+            Vector2d min_res = traj_.findMinPtInSegment(0, cur_pos, 0.0);
+            ref_state = traj_.getState(min_res(1), 0);
+        }
+        else if (min_ind == pos_matrix.cols()) {
+            // ROS_WARN("enter end");
+            double t = traj_.getDurations()[min_ind - 1];
+            Vector2d min_res = traj_.findMinPtInSegment(min_ind - 1, cur_pos, t);
+            ref_state = traj_.getState(min_res(1), min_ind - 1);
+        }                                                                                                       
+        double del_theta = car_state.theta - ref_state.theta;
+        // double kappa_x = tan(car_state.delta) / L;
+    
+        fre_state.s = ref_state.s;
+        double dy = car_state.y - ref_state.y;
+        double dx = car_state.x - ref_state.x;
+        fre_state.l = std::copysign(hypot(dx, dy), (dy * cos(ref_state.theta) - dx * sin(ref_state.theta)));
+        fre_state.dl = (1 - ref_state.kappa * fre_state.l) * tan(del_theta);
+        fre_state.ddl = -(ref_state.dkappa * fre_state.l + ref_state.kappa * fre_state.dl) * tan(del_theta) +
+                        (1 - ref_state.kappa * fre_state.l) / (cos(del_theta) * cos(del_theta)) *
+                        (((1 - ref_state.kappa * fre_state.l) / cos(del_theta) * car_state.kappa - ref_state.kappa));
+        fre_state.ds = car_state.speed * cos(del_theta) / (1 - ref_state.kappa * fre_state.l);
+        fre_state.dds = (car_state.acc * cos(del_theta) - pow(fre_state.ds, 2) *
+                        (fre_state.dl * ((1 - ref_state.kappa * fre_state.l) / cos(del_theta) * car_state.kappa - ref_state.kappa) -
+                        (ref_state.dkappa * fre_state.l + ref_state.kappa * fre_state.dl))) /
+                        (1 - ref_state.kappa * fre_state.l);
+        // ROS_WARN("init_sl_finished");
+        // ROS_WARN("s:%f, l:%f, ds:%f, dds:%f, dl:%f, ddl:%f", fre_state.s, fre_state.l, fre_state.ds, fre_state.dds, fre_state.dl, fre_state.ddl);
+    }
+    
+    void FrenetToCar(const FrenetState& fre_state, CartesianState& car_state) {
+        auto start_time = std::chrono::high_resolution_clock::now();
+        // ROS_WARN("enter FrenetToCar");
+        //这里将refline上的参考点也保存下来用于构造后续优化的目标函数，直接对best_path_ref进行插值，之后如果在别的地方调用这个函数会出问题
+        GlobalPathPoint ref_state{0, 0, 0, 0, 0, 0};
+        if(!is_using_global_df_) {
+            int first_ind = -1;
+            for(int i = 1; i < refline_.x.size(); ++i) {
+                if (refline_.all_s[i] > fre_state.s) {
+                    first_ind = i - 1;
+                    // cout << "first_ind: " << first_ind << endl;
+                    break;
+                }
+            }
+            // cout << "first_ind: " << first_ind << endl;
+            if(first_ind != -1) {
+                ref_state = CoarsePathGenerator::FindRefPt(refline_.x[first_ind], refline_.y[first_ind], refline_.all_s[first_ind],
+                                                                                                            refline_.theta[first_ind], refline_.kappa[first_ind], refline_.dkappa[first_ind],
+                                                                                                            refline_.theta[first_ind + 1], refline_.kappa[first_ind + 1], refline_.dkappa[first_ind + 1],
+                                                                                                            refline_.s[first_ind], fre_state.s);    
+            }else {
+                ref_state = GlobalPathPoint{refline_.theta[refline_.x.size() - 1], refline_.kappa[refline_.x.size() - 1], refline_.dkappa[refline_.x.size() - 1], refline_.all_s[refline_.x.size() - 1], refline_.x[refline_.x.size() - 1], refline_.y[refline_.x.size() - 1]};
+            }
+        }
+        else {
+            double s = 0.0, raletive_s = 0.0;
+            int piece_ind = -1;
+            for(int i = 0; i < traj_.Pieces_S.size(); ++i) {
+                if(s +traj_.Pieces_S[i] >= fre_state.s) {
+                    piece_ind = i;
+                    raletive_s = fre_state.s - s;
+                    break;
+                }
+                s += traj_.Pieces_S[i];
+            }
+            if(piece_ind == -1) {
+                ROS_ERROR("Find S failed");
+                return;
+            }
+            double t = traj_.findTInSegment(piece_ind, raletive_s);
+            ref_state = traj_.getState(t, piece_ind);
         }
         best_path_ref_.emplace_back(ref_state);
         car_state.x = ref_state.x - fre_state.l * sin(ref_state.theta);
@@ -145,31 +250,70 @@ private:
         double temp_kappa = ((fre_state.ddl + (ref_state.dkappa * fre_state.l + ref_state.kappa * fre_state.dl) * tan(del_theta)) *
                             (cos(del_theta) * cos(del_theta) / (1 - ref_state.kappa * fre_state.l)) + ref_state.kappa) *
                             cos(del_theta) / (1 - ref_state.kappa * fre_state.l);
+        // cout << "init_delta: " << atan2(2.7 * temp_kappa, 1) << endl;
+        // cout << "ref_state:(曲率) " << ref_state.kappa << ", " << ref_state.dkappa << endl;
         car_state.kappa = temp_kappa;
         car_state.acc = fre_state.dds * (1 - ref_state.kappa * fre_state.l) / cos(del_theta) +
                     pow(fre_state.dds, 2) / cos(del_theta) *
                     (fre_state.dl * ((1 - ref_state.kappa * fre_state.l) / cos(del_theta) * car_state.kappa - ref_state.kappa) -
                         (ref_state.dkappa * fre_state.l + ref_state.kappa * fre_state.dl));
-        // cout << "Car_state: " << car_state.x << " " << car_state.y << " " << car_state.theta << " " << car_state.speed << " " << car_state.acc << " " << car_state.kappa << endl;
+        // cout << "Car_state: " << car_state.x << " " << car_state.y << " " << car_state.theta << " " << car_state.speed << " " << car_state.acc << " " << atan(2.7 * temp_kappa)<< endl;
+    
+        auto end_time = std::chrono::high_resolution_clock::now();
+        // 计算时间间隔
+        std::chrono::duration<double> elapsed_seconds = end_time - start_time;
+        // 输出时间间隔
+        std::cout << "FrenetToCar时间: " << elapsed_seconds.count() << " 秒" << std::endl;
     }
     void FrenetToCarOnlyPos(const double s, const double l, const double dl, CartesianState& car_state) {
         // cout << "s: " << s << " l: " << l << " dl: " << dl << endl;
+        // ROS_WARN("enterFrenetToCarOnlyPos");
+        //这里将refline上的参考点也保存下来用于构造后续优化的目标函数，直接对best_path_ref进行插值，之后如果在别的地方调用这个函数会出问题
         GlobalPathPoint ref_state{0, 0, 0, 0, 0, 0};
-        int first_ind = -1;
-        for(int i = 1; i < refline_.x.size(); ++i) {
-            if (refline_.all_s[i] > s) {
-                first_ind = i - 1;
-                break;
+        if(!is_using_global_df_) {
+            int first_ind = -1;
+            for(int i = 1; i < refline_.x.size(); ++i) {
+                if (refline_.all_s[i] > s) {
+                    first_ind = i - 1;
+                    // cout << "first_ind: " << first_ind << endl;
+                    break;
+                }
+            }
+            // cout << "first_ind: " << first_ind << endl;
+            if(first_ind != -1) {
+                ref_state = CoarsePathGenerator::FindRefPt(refline_.x[first_ind], refline_.y[first_ind], refline_.all_s[first_ind],
+                                                                                                            refline_.theta[first_ind], refline_.kappa[first_ind], refline_.dkappa[first_ind],
+                                                                                                            refline_.theta[first_ind + 1], refline_.kappa[first_ind + 1], refline_.dkappa[first_ind + 1],
+                                                                                                            refline_.s[first_ind], s);    
+            }else {
+                ref_state = GlobalPathPoint{refline_.theta[refline_.x.size() - 1], refline_.kappa[refline_.x.size() - 1], refline_.dkappa[refline_.x.size() - 1], refline_.all_s[refline_.x.size() - 1], refline_.x[refline_.x.size() - 1], refline_.y[refline_.x.size() - 1]};
             }
         }
-        if(first_ind != -1) {
-            ref_state = CoarsePathGenerator::FindRefPt(refline_.x[first_ind], refline_.y[first_ind], refline_.all_s[first_ind],
-                                                                                                        refline_.theta[first_ind], refline_.kappa[first_ind], refline_.dkappa[first_ind],
-                                                                                                        refline_.theta[first_ind + 1], refline_.kappa[first_ind + 1], refline_.dkappa[first_ind + 1],
-                                                                                                        refline_.s[first_ind], s);
-        }else {
-            ref_state = GlobalPathPoint{refline_.theta[refline_.x.size() - 1], refline_.kappa[refline_.x.size() - 1], refline_.dkappa[refline_.x.size() - 1], refline_.all_s[refline_.x.size() - 1], refline_.x[refline_.x.size() - 1], refline_.y[refline_.x.size() - 1]};
+        else {
+            double all_s = 0.0, relative_s = 0.0;
+            int piece_ind = -1;
+            for(int i = 0; i < traj_.Pieces_S.size(); ++i) {
+                if(all_s +traj_.Pieces_S[i] >= s) {
+                    piece_ind = i;
+                    relative_s = s - all_s;
+                    break;
+                }
+                all_s += traj_.Pieces_S[i];
+            }
+            if(piece_ind == -1) {
+                ROS_ERROR("Find S failed");
+                return;
+            }
+            double t = traj_.findTInSegment(piece_ind, relative_s);
+            ref_state = traj_.getState(t, piece_ind);
         }
+        // cout << ref_state.x << " " << ref_state.y << " " << ref_state.theta << " " << ref_state.kappa << " " << ref_state.s << endl;
+        car_state.x = ref_state.x - l * sin(ref_state.theta);
+        car_state.y = ref_state.y + l * cos(ref_state.theta);
+        car_state.theta = ref_state.theta + atan2(dl / (1 - ref_state.kappa * l), 1);
+    }
+
+    void FrenetToCarOnlyPos2(const GlobalPathPoint ref_state, const double l, const double dl, CartesianState& car_state) {
         // cout << ref_state.x << " " << ref_state.y << " " << ref_state.theta << " " << ref_state.kappa << " " << ref_state.s << endl;
         car_state.x = ref_state.x - l * sin(ref_state.theta);
         car_state.y = ref_state.y + l * cos(ref_state.theta);
@@ -253,7 +397,7 @@ private:
         }
     }
 
-    double costFunction(double s, double l, double t, double prev_s, double prev_l, double prev_t, double prev_speed, double prev_acc, const vector<Vector3d>& obs) {
+    double costFunction(double s, double l, double t, double prev_s, double prev_l, double prev_t, double prev_speed, double prev_acc, const vector<Vector3d>& obs, GlobalPathPoint& ref_state) {
         const double w_offset = 1500;//1000.0;
         const double w_lat_change = 800;//100.0;
         const double w_vlat = 1000;//1000.0;
@@ -287,7 +431,9 @@ private:
 
         // 碰撞成本
         CartesianState car_state{0, 0, 0, 0, 0, 0};
-        FrenetToCarOnlyPos(s +  + init_sl_state_.s, l, dl, car_state);
+        // FrenetToCarOnlyPos(s + init_sl_state_.s, l, dl, car_state);
+        FrenetToCarOnlyPos2(ref_state, l, dl, car_state);
+
         double coll_cost = 0;//isCollision(car_state, obs) * 1e8;
         if(isCollision(car_state, obs) > 0) {
             // ROS_WARN("Collision detected");

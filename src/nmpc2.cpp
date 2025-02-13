@@ -8,7 +8,7 @@ Mpc::Mpc(int count) {
     acc_max_ = 1.5;
     v_max_ = 15 / 3.6;
     delta_max_ = 0.52;
-    vector<double> weights = {1,1,1,0,2,2,100,100}; //Q,R,S
+    vector<double> weights = {1,1,1,0,2,2,10,10}; //Q,R,S
     acc_min_ = - acc_max_;
     delta_min_ = - delta_max_;
     
@@ -73,9 +73,11 @@ bool Mpc::solve(CartesianState& current_state,
             initX(1, i) = ref_states[i].y;
             initX(2, i) = ref_states[i].speed;
             initX(3, i) = ref_states[i].theta;
+            // cout << "init_x: " <<  ref_states[i].x << ", " << ref_states[i].y << ", " << ref_states[i].speed << ", " << ref_states[i].theta << endl;
             if(i < N_) {
                 initU(0, i) = ref_states[i].acc;
                 initU(1, i) = std::atan2(2.7 * ref_states[i].kappa, 1);
+                // cout << "init_control: " <<  ref_states[i].acc << ", " << std::atan2(2.7 * ref_states[i].kappa, 1) << endl;
             }
         }
 
@@ -196,7 +198,7 @@ bool Mpc::solve(CartesianState& current_state,
                 d2poly(ref_pos, poly, alpha, beta, d); // 计算到多边形的距离
 
                 //非线性的前轴约束
-                opti.subject_to(alpha(0) *( X(0, i) + 2.7 * cos(X(3, i))) + alpha(1) * (X(1, i) + 2.7 * sin(X(3, i)))+ S(1, i) <= beta - margin);
+                // opti.subject_to(alpha(0) *( X(0, i) + 2.7 * cos(X(3, i))) + alpha(1) * (X(1, i) + 2.7 * sin(X(3, i)))+ S(1, i) <= beta - margin);
                 // opti.subject_to(alpha(0) *( X(0, i) + 2.7 * cos(X(3, i))) + alpha(1) * (X(1, i) + 2.7 * sin(X(3, i))) <= beta - margin);
                 // cout << "alpha2:" << alpha(0) << ", " << alpha(1) << ", beta:" << beta << ", d:" << d << endl;
                 
@@ -229,7 +231,7 @@ bool Mpc::solve(CartesianState& current_state,
 					double S_f = beta - margin + alpha.transpose() * 2.7 * (dfX0 * ref_X - fX0);
                     // cout << "sf: " << S_f << endl;
                     // cout << "lf0: " << L_f(0) << ", lf1: " << L_f(1) << ", lf2: " << L_f(2) << ", lf3: " << L_f(3) << endl;
-                    // opti.subject_to(L_f(0) * X(0, i) + L_f(1) * X(1, i) + L_f(2) * X(0, i + 1) + L_f(3) * X(1, i + 1)  + S(1, i) <= S_f);
+                    opti.subject_to(L_f(0) * X(0, i) + L_f(1) * X(1, i) + L_f(2) * X(0, i + 1) + L_f(3) * X(1, i + 1)  + S(1, i) <= S_f);
                 }
 
             }

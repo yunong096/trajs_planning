@@ -9,6 +9,16 @@ geometry_msgs::Vector3 goal_pose_;    // 终点
 const std::string Frame_id = "map"; //参考系的定义
 bool IS_USING_DF_GLOBAL_PLANNER = true; //false
 
+//系数表的定义
+const std::vector<double> GaussLegendreIntegration::nodes3 = {-0.7745966692414834, 0.0, 0.7745966692414834};
+const std::vector<double> GaussLegendreIntegration::weights3 = {0.5555555555555556, 0.8888888888888888, 0.5555555555555556};
+
+const std::vector<double> GaussLegendreIntegration::nodes4 = {-0.8611363115940526, -0.3399810435848563, 0.3399810435848563, 0.8611363115940526};
+const std::vector<double> GaussLegendreIntegration::weights4 = {0.3478548451374538, 0.6521451548625461, 0.6521451548625461, 0.3478548451374538};
+
+const std::vector<double> GaussLegendreIntegration::nodes5 = {-0.9061798459386640, -0.5384693101056831, 0.0, 0.5384693101056831, 0.9061798459386640};
+const std::vector<double> GaussLegendreIntegration::weights5 = {0.2369268850561891, 0.4786286704993665, 0.5688888888888889, 0.4786286704993665, 0.2369268850561891};
+
 /*定义起点位置*/
 void Dynamic_routing::start_pose_call_backs(const geometry_msgs::Vector3 &msg)
 {
@@ -107,6 +117,7 @@ void Dynamic_routing::thread_routing(void)
 {
   ros::NodeHandle n;
   ros::Rate loop_rate(2);
+  traj_utils::Trajectory traj;
   // 障碍物对象
   Obstacles obs = Obstacles();
   // sleep(2);
@@ -199,8 +210,10 @@ void Dynamic_routing::thread_routing(void)
           cout << "df replan goal pose: " << goal_pose_.x << ", " << goal_pose_.y << ", " << goal_pose_.z << endl;
           // cout << "test equal: " << (*df_opt_->getMinJerkOptPtr())[1].getHeadX() << ", " << (*df_opt_->getMinJerkOptPtr())[1].getHeadY() << ", " << (*df_opt_->getMinJerkOptPtr())[1].getHeadTheta() << endl;
 
-          //在opt中存储s
-          (*df_opt_->getMinJerkOptPtr())[0].getTraj(1).setPiece_S();
+          //在opt中存储s，在planner里设置
+          // (*df_opt_->getMinJerkOptPtr())[0].getTraj(1).setPiece_S();
+          traj = (*df_opt_->getMinJerkOptPtr())[0].getTraj(1);
+          traj.setPiece_S();
         }
       }
     }
@@ -247,15 +260,16 @@ void Dynamic_routing::thread_routing(void)
           ROS_WARN("finish dp planner");
         }
         else {
-          // DpPlanner dp_planner = DpPlanner(IS_USING_DF_GLOBAL_PLANNER, refline, init_car_state, obs, frame_count, best_path);
-          // dp_planner.DynamicProgramming();
-          // best_path = dp_planner.getBestPath();
-          // ref_path = dp_planner.getRefPath();
-          // ROS_WARN("finish dp planner");
+          DpPlanner dp_planner = DpPlanner(IS_USING_DF_GLOBAL_PLANNER, df_opt_, traj, init_car_state, obs, frame_count, best_path);
+          dp_planner.DynamicProgramming();
+          best_path = dp_planner.getBestPath();
+          ref_path = dp_planner.getRefPath();
+          ROS_WARN("finish dp planner");
         }
-        // Mpc npmc_opt(frame_count);
-        // npmc_opt.solve(init_car_state, ref_path, best_path, obs);
-        // best_path = npmc_opt.getFinalPath();
+
+        Mpc npmc_opt(frame_count);
+        npmc_opt.solve(init_car_state, ref_path, best_path, obs);
+        best_path = npmc_opt.getFinalPath();
 
         // altro::problems::VehicleProblem altro_problem(frame_count);
         // altro_problem.IterOpt(init_car_state, ref_path, best_path, obs);

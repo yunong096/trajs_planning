@@ -8,6 +8,7 @@
 #include "df_planner/constants.h"
 // #include "dp_planner.hpp"
 #include "nmpc2.hpp"
+#include "GuassIter.hpp"
 
 namespace traj_utils {
   
@@ -220,10 +221,13 @@ class Piece {
       res.acc = (singul * (dsigma(0) * ddsigma(0) + dsigma(1) * ddsigma(1)) /
                  dsigma_norm);
       
-      //出于与nmpc2的仿真一致性需要,直接将kappa赋值为delta
-      res.kappa = atan(2.7 * (singul *
-                         (dsigma(0) * ddsigma(1) - dsigma(1) * ddsigma(0)) /
-                         (dsigma_norm * dsigma_norm * dsigma_norm)));
+      // //出于与nmpc2的仿真一致性需要,直接将kappa赋值为delta
+      // res.kappa = atan(2.7 * (singul *
+      //                    (dsigma(0) * ddsigma(1) - dsigma(1) * ddsigma(0)) /
+      //                    (dsigma_norm * dsigma_norm * dsigma_norm)));
+      res.kappa =(singul *
+        (dsigma(0) * ddsigma(1) - dsigma(1) * ddsigma(0)) /
+        (dsigma_norm * dsigma_norm * dsigma_norm));
     }
   }
 
@@ -243,10 +247,10 @@ class Piece {
       res.kappa = singul *
                          (dsigma(0) * ddsigma(1) - dsigma(1) * ddsigma(0)) /
                          (dsigma_norm * dsigma_norm * dsigma_norm);
-      res.kappa = singul *(
-                              (dsigma_norm * dsigma_norm * dsigma_norm) * (ddsigma(0) * ddsigma(1) + dsigma(0) * dddsigma(1) - ddsigma(1) /(ddsigma(0) * dsigma(1) * dddsigma(0))) 
+      res.dkappa = singul *(
+                              (ddsigma(0) * ddsigma(1) + dsigma(0) * dddsigma(1) - ddsigma(1) *ddsigma(0) -  dsigma(1) * dddsigma(0)) / (dsigma_norm * dsigma_norm * dsigma_norm)
                               + 
-                              (dsigma(0) * ddsigma(1) - dsigma(1) * ddsigma(0)) * (-3/2) * pow(dsigma_norm, -5) * 2 * (dsigma(1) * ddsigma(1) + dsigma(0) * ddsigma(0)) 
+                              (dsigma(0) * ddsigma(1) - dsigma(1) * ddsigma(0)) * (-3/2) * pow(dsigma_norm * dsigma_norm, -5 / 2) * 2 * (dsigma(1) * ddsigma(1) + dsigma(0) * ddsigma(0)) 
                                 );
     }
   }
@@ -357,16 +361,33 @@ class Trajectory {
   }
 
   std::vector<double> Pieces_S;
+  std::vector<double> Pieces_allS;
+
+  GlobalPathPoint getState(double relative_t, int piece_idx) const
+  {
+     GlobalPathPoint res;
+      pieces[piece_idx].getState(relative_t, res);
+      double relative_s = computeArcLength(piece_idx, 0.0, relative_t);
+      if(piece_idx > 0) res.s = relative_s + + Pieces_allS[piece_idx - 1];
+      else res.s = relative_s;
+    // ROS_WARN("left getState");
+      return res;
+  }
+
   void setPiece_S() {
     int N = pieces.size();
     Pieces_S = vector<double>(N, 0);
+    Pieces_allS = vector<double>(N, 0);
     for(int i = 0; i < N; ++i) {
       double piece_t = pieces[i].getDuration();
-      Pieces_S[i] = computeArcLength(i, 0.0, piece_t);
+      Pieces_S[i] = computeArcLength(i, 0.0, piece_t, 1000);
+      if(i == 0) Pieces_allS[i] = Pieces_S[i];
+      else Pieces_allS[i] = Pieces_allS[i - 1] + Pieces_S[i];
+      // cout << Pieces_S[i] << ", " << Pieces_allS[i] << endl;
     }
   }
 
-  double computeArcLength(double piece_idx, double t_start, double t_end, int steps = 1000) const {
+  double computeArcLength(int piece_idx, double t_start, double t_end, int steps = 100) const {
         double length = 0.0;
         double dt = (t_end - t_start) / steps;
         for (int i = 0; i < steps; ++i) {
@@ -374,18 +395,80 @@ class Trajectory {
             auto dpos = pieces[piece_idx].getdSigma(t);
             length += std::hypot(dpos(0), dpos(1)) * dt;
         }
+        // ROS_WARN("left computeArcLength");
         return length;
     }
 
-    // 在段内通过二分法求解t
-    double findTInSegment(const int piece_idx, double s_local, double eps = 1e-6) const {
+    double computeArcLength2(int piece_idx, double t_start, double t_end) const {
+      std::function<double(double)> func = [this, piece_idx](double t) {
+        auto dpos = pieces[piece_idx].getdSigma(t);
+        return std::sqrt(dpos(0) * dpos(0) +  dpos(1) * dpos(1));
+      };
+      GaussLegendreIntegration integrator(GaussLegendreIntegration::NodeCount::Three);
+      integrator.func = func;
+      double result = integrator.integrate(t_start, t_end);
+      return result;
+  }
+
+    // 在段内通过二分法求解s对应的t
+    double findTInSegment(const int piece_idx, double s_local, double eps = 1e-3) const {
         double low = 0.0, high = pieces[piece_idx].getDuration();
         while (high - low > eps) {
             double mid = (low + high) / 2;
-            double len = computeArcLength(piece_idx, 0, mid);
+            double len = computeArcLength2(piece_idx, 0, mid);
             (len < s_local) ? low = mid : high = mid;
         }
         return (low + high) / 2;
+    }
+
+    double distanceSquared(double x1, double y1, double x2, double y2) const {
+        return (x1 - x2) * (x1 - x2) + (y1 - y2) * (y1 - y2);
+    }
+
+    // 在段内通过牛顿法求解最近点对应的t
+    Vector2d findMinPtInSegment(const int piece_idx, Vector2d pos, double closest_t) const {
+      // ROS_WARN("enter NewTon Method");
+      double t = closest_t; // 初始猜测
+      double tolerance = 1e-6;
+      double epsilon = 1e-8; // 防止除零
+      double minDistanceSquared = std::numeric_limits<double>::max();
+      double x0 = pos(0), y0 = pos(1);
+      GlobalPathPoint res();
+      int max_iter = 100;
+      while (max_iter--) {
+          double x = pieces[piece_idx].getPos(t)(0);
+          double y = pieces[piece_idx].getPos(t)(1);
+          double currentDistanceSquared = distanceSquared(x, y, x0, y0);
+  
+          if (currentDistanceSquared < minDistanceSquared) {
+              minDistanceSquared = currentDistanceSquared;
+              closest_t = t;
+          }
+  
+          double dx = pieces[piece_idx].getdSigma(t)(0);
+          double dy = pieces[piece_idx].getdSigma(t)(1);
+          double ddx = pieces[piece_idx].getddSigma(t)(0);
+          double ddy = pieces[piece_idx].getddSigma(t)(1);
+  
+          double gradD = 2 * ((x - x0) * dx + (y - y0) * dy);
+          double hessD = 2 * ((dx * dx + dy * dy) + (x - x0) * ddx + (y - y0) * ddy);
+  
+          if (std::abs(gradD) < tolerance || std::abs(hessD) < epsilon) {
+              break;
+          }
+  
+          double deltaT = -gradD / hessD;
+          t += deltaT;
+  
+          if (t < 0) {
+            t = 0;
+          }
+          if (t > pieces[piece_idx].getDuration()) {
+              t = pieces[piece_idx].getDuration();
+            }
+      }
+  
+      return Vector2d(std::sqrt(minDistanceSquared), closest_t);
     }
 
     

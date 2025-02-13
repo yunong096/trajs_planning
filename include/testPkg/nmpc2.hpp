@@ -141,8 +141,8 @@ public:
             state.theta = static_cast<double>(solution_->value(X)(3, i));
             if (i < N_) {
                 state.acc = static_cast<double>(solution_->value(U)(0, i));
-                state.kappa = static_cast<double>(solution_->value(U)(1, i));
-                // state.kappa = tan(static_cast<double>(solution_->value(U)(1, i))) / 2.7;
+                // state.kappa = static_cast<double>(solution_->value(U)(1, i));
+                state.kappa = tan(static_cast<double>(solution_->value(U)(1, i))) / 2.7;
             }
             else {
                 state.acc = 0;

@@ -293,7 +293,7 @@ void GlobalRouting::thread_routing()
         if(controller ==  "simulation" ) {
             // Tc = accs[simulation_count_];
             // // turn_angle = tan(2.7 * kappas[simulation_count_]); //atan(L*kappa)
-            // turn_angle = kappas[simulation_count_];
+            // turn_angle = atan2(2.7 * kappas[simulation_count_], 1);
             // msg_ros.x = Tc;           // 加速度
             // msg_ros.y = turn_angle;  //转角
             // msg_ros.z = -1;

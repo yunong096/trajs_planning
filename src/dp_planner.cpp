@@ -8,7 +8,10 @@ void DpPlanner::Initialize() {
     t_num = 7;
     t_hri = 6;
     s_num = 21;
-    s_hri = std::min(v_max * t_hri, refline_.all_s.back() - init_sl_state_.s);
+    if(!is_using_global_df_)
+        s_hri = std::min(v_max * t_hri, refline_.all_s.back() - init_sl_state_.s);
+    else
+        s_hri = std::min(v_max * t_hri, traj_.Pieces_allS.back() - init_sl_state_.s);
     // s_num = s_hri  < refline_.all_s.back() - init_sl_state_.s ? 21 : 11;
 
     // s_hri = std::min(v_max * t_hri, 60 - init_sl_state_.s); //测试用
@@ -127,6 +130,46 @@ void DpPlanner::DynamicProgramming() {
         ROS_WARN("v_ref: %f", v_ref);
         for (int s_idx = 0; s_idx < s_num; ++s_idx) {
             double s =s_range[s_idx];
+
+            GlobalPathPoint ref_state{0, 0, 0, 0, 0, 0};
+            if(is_using_global_df_) {
+                double all_s = 0.0, relative_s = 0.0;
+                int piece_ind = -1;
+                for(int i = 0; i < traj_.Pieces_S.size(); ++i) {
+                    if(all_s +traj_.Pieces_S[i] >= s + init_sl_state_.s) {
+                        piece_ind = i;
+                        relative_s = s + init_sl_state_.s - all_s;
+                        break;
+                    }
+                    all_s += traj_.Pieces_S[i];
+                }
+                if(piece_ind == -1) {
+                    ROS_ERROR("Find S failed");
+                    return;
+                }
+                double t = traj_.findTInSegment(piece_ind, relative_s);
+                ref_state = traj_.getState(t, piece_ind);
+            }
+            else {
+                int first_ind = -1;
+                for(int i = 1; i < refline_.x.size(); ++i) {
+                    if (refline_.all_s[i] >s + init_sl_state_.s) {
+                        first_ind = i - 1;
+                        // cout << "first_ind: " << first_ind << endl;
+                        break;
+                    }
+                }
+                // cout << "first_ind: " << first_ind << endl;
+                if(first_ind != -1) {
+                    ref_state = CoarsePathGenerator::FindRefPt(refline_.x[first_ind], refline_.y[first_ind], refline_.all_s[first_ind],
+                                                                                                                refline_.theta[first_ind], refline_.kappa[first_ind], refline_.dkappa[first_ind],
+                                                                                                                refline_.theta[first_ind + 1], refline_.kappa[first_ind + 1], refline_.dkappa[first_ind + 1],
+                                                                                                                refline_.s[first_ind], s + init_sl_state_.s);    
+                }else {
+                    ref_state = GlobalPathPoint{refline_.theta[refline_.x.size() - 1], refline_.kappa[refline_.x.size() - 1], refline_.dkappa[refline_.x.size() - 1], refline_.all_s[refline_.x.size() - 1], refline_.x[refline_.x.size() - 1], refline_.y[refline_.x.size() - 1]};
+                }
+            }
+            
             if(t_idx == 1 && s >= v_max * t_res) break;
             if(s > stop_s) break;
             for (int l_idx = 0; l_idx < l_num; ++l_idx) {
@@ -136,7 +179,7 @@ void DpPlanner::DynamicProgramming() {
                     double prev_s = 0.0;
                     double prev_l = init_sl_state_.l;
                     double prev_t = 0.0;
-                    double total_cost = costFunction(s, l, t, prev_s, prev_l, prev_t, init_sl_state_.ds, init_sl_state_.dds, obs_vehicles);
+                    double total_cost = costFunction(s, l, t, prev_s, prev_l, prev_t, init_sl_state_.ds, init_sl_state_.dds, obs_vehicles, ref_state);
                     updateMatrices(s_idx, l_idx, t_idx, 0, 0, 0, total_cost, prev_s, prev_l, prev_t, init_sl_state_.ds);
                 } else {
                     for (int prev_s_idx = 0; prev_s_idx <= s_idx; ++prev_s_idx) { // 考虑前进和可能的停车（不倒车）
@@ -152,7 +195,7 @@ void DpPlanner::DynamicProgramming() {
                                 continue;
                             }
 
-                            double total_cost = cost_matrix_[prev_s_idx][prev_l_idx][t_idx - 1] + costFunction(s, l, t, prev_s, prev_l, prev_t, prev_speed, prev_acc, obs_vehicles);
+                            double total_cost = cost_matrix_[prev_s_idx][prev_l_idx][t_idx - 1] + costFunction(s, l, t, prev_s, prev_l, prev_t, prev_speed, prev_acc, obs_vehicles, ref_state);
                             updateMatrices(s_idx, l_idx, t_idx, prev_s_idx, prev_l_idx, t_idx - 1, total_cost, prev_s, prev_l, prev_t, prev_speed);
                         }
                     }
