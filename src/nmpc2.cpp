@@ -95,11 +95,11 @@ bool Mpc::solve(CartesianState& current_state,
             initX(1, i) = ref_states[i].y;
             initX(2, i) = ref_states[i].speed;
             initX(3, i) = ref_states[i].theta;
-            // cout << "init_x: " <<  ref_states[i].x << ", " << ref_states[i].y << ", " << ref_states[i].speed << ", " << ref_states[i].theta << endl;
+            cout << "init_x: " <<  ref_states[i].x << ", " << ref_states[i].y << ", " << ref_states[i].speed << ", " << ref_states[i].theta << endl;
             if(i < N_) {
                 initU(0, i) = ref_states[i].acc;
                 initU(1, i) = std::atan2(2.7 * ref_states[i].kappa, 1);
-                // cout << "init_control: " <<  ref_states[i].acc << ", " << std::atan2(2.7 * ref_states[i].kappa, 1) << endl;
+                cout << "init_control: " <<  ref_states[i].acc << ", " << std::atan2(2.7 * ref_states[i].kappa, 1) << endl;
             }
         }
 

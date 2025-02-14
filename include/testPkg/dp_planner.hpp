@@ -251,8 +251,8 @@ private:
         double temp_kappa = ((fre_state.ddl + (ref_state.dkappa * fre_state.l + ref_state.kappa * fre_state.dl) * tan(del_theta)) *
                             (cos(del_theta) * cos(del_theta) / (1 - ref_state.kappa * fre_state.l)) + ref_state.kappa) *
                             cos(del_theta) / (1 - ref_state.kappa * fre_state.l);
-        // cout << "init_delta: " << atan2(2.7 * temp_kappa, 1) << endl;
-        // cout << "ref_state:(曲率) " << ref_state.kappa << ", " << ref_state.dkappa << endl;
+        cout << "init_delta: " << atan2(2.7 * temp_kappa, 1) << endl;
+        cout << "ref_state:(曲率) " << ref_state.kappa << ", " << ref_state.dkappa << endl;
         car_state.kappa = temp_kappa;
         car_state.acc = fre_state.dds * (1 - ref_state.kappa * fre_state.l) / cos(del_theta) +
                     pow(fre_state.dds, 2) / cos(del_theta) *
