@@ -114,7 +114,7 @@ public:
              else
                 traj.cur_state.theta =  last_theta;
              traj.cur_state.v =  hypot(traj.points[1].first - traj.points[0].first, traj.points[1].second - traj.points[0].second) / 0.1;
-             cout << "cur_state: " <<   traj.cur_state.x << ", " <<  traj.cur_state.y << ", " <<traj.cur_state.theta <<  endl;
+            //  cout << "cur_state: " <<   traj.cur_state.x << ", " <<  traj.cur_state.y << ", " <<traj.cur_state.theta <<  endl;
             data.push_back(traj);
         }
         file.close();

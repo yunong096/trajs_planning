@@ -144,8 +144,10 @@ void DpPlanner::DynamicProgramming() {
                     all_s += traj_.Pieces_S[i];
                 }
                 if(piece_ind == -1) {
-                    ROS_ERROR("Find S failed");
-                    return;
+                    // ROS_ERROR("Find S failed");
+                    // ROS_ERROR("Find S failed, need_S: %f, all_S: %f", s + init_sl_state_.s, traj_.Pieces_allS.back());
+                    // return;
+                    piece_ind = traj_.Pieces_S.size() - 1;
                 }
                 double t = traj_.findTInSegment(piece_ind, relative_s);
                 ref_state = traj_.getState(t, piece_ind);

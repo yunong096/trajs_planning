@@ -267,7 +267,7 @@ void Dynamic_routing::thread_routing(void)
           ROS_WARN("finish dp planner");
         }
 
-        Mpc npmc_opt(frame_count);
+        Mpc npmc_opt(frame_count, Vector3d(goal_pose_.x, goal_pose_.y, goal_pose_.z));
         npmc_opt.solve(init_car_state, ref_path, best_path, obs);
         best_path = npmc_opt.getFinalPath();
 

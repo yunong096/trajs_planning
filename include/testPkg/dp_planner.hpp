@@ -80,7 +80,7 @@ private:
         // 计算时间间隔
         std::chrono::duration<double> elapsed_seconds = end_time - start_time;
         // 输出时间间隔
-        std::cout << "CarToFrenet时间: " << elapsed_seconds.count() << " 秒" << std::endl;
+        // std::cout << "CarToFrenet时间: " << elapsed_seconds.count() << " 秒" << std::endl;
     }
 
     void CarToFrenet1(const CartesianState& car_state, FrenetState& fre_state) {
@@ -235,8 +235,9 @@ private:
                 s += traj_.Pieces_S[i];
             }
             if(piece_ind == -1) {
-                ROS_ERROR("Find S failed");
-                return;
+                // ROS_ERROR("Find S failed, need_S: %f, all_S: %f", fre_state.s, traj_.Pieces_allS.back());
+                // return;
+                piece_ind = traj_.Pieces_S.size() - 1;
             }
             double t = traj_.findTInSegment(piece_ind, raletive_s);
             ref_state = traj_.getState(t, piece_ind);
@@ -263,7 +264,7 @@ private:
         // 计算时间间隔
         std::chrono::duration<double> elapsed_seconds = end_time - start_time;
         // 输出时间间隔
-        std::cout << "FrenetToCar时间: " << elapsed_seconds.count() << " 秒" << std::endl;
+        // std::cout << "FrenetToCar时间: " << elapsed_seconds.count() << " 秒" << std::endl;
     }
     void FrenetToCarOnlyPos(const double s, const double l, const double dl, CartesianState& car_state) {
         // cout << "s: " << s << " l: " << l << " dl: " << dl << endl;
@@ -301,8 +302,9 @@ private:
                 all_s += traj_.Pieces_S[i];
             }
             if(piece_ind == -1) {
-                ROS_ERROR("Find S failed");
-                return;
+                // ROS_ERROR("Find S failed");
+                // return;
+                piece_ind = traj_.Pieces_S.size() - 1;
             }
             double t = traj_.findTInSegment(piece_ind, relative_s);
             ref_state = traj_.getState(t, piece_ind);

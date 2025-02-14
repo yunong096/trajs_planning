@@ -21,6 +21,7 @@ private:
     double delta_max_ = 0.52;
     double acc_min_ ;
     double delta_min_ ;
+    Vector3d goal_pose_;
     DM Q_, R_, S_;
     MX X, U, S;
     std::unique_ptr<casadi::OptiSol> solution_;
@@ -119,6 +120,7 @@ private:
     }
 public:
     Mpc(int count);
+    Mpc(int count, const Vector3d& goal_pose);
     ~Mpc() {};
     bool solve(CartesianState& current_state,
                                                         std::vector<GlobalPathPoint>& ori_states,

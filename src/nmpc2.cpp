@@ -21,6 +21,28 @@ Mpc::Mpc(int count) {
     kinematic_equation_ = setKinematicEquation();
 }
 
+Mpc::Mpc(int count, const Vector3d& goal_pose) {
+    
+    frame_count = count;
+    N_ = 60;
+    dt_ = 0.1;
+    acc_max_ = 60;
+    v_max_ = 15 / 3.6;
+    delta_max_ = 0.52;
+    vector<double> weights = {2,2,2,0,4,4,12,12}; //Q,R,S
+    acc_min_ = - acc_max_;
+    delta_min_ = - delta_max_;
+    goal_pose_ = goal_pose;
+    
+    Q_ = DM::zeros(4,4); //索引之前初始化size
+    R_ = DM::zeros(2,2);
+    S_ = DM::zeros(2,2);
+    
+
+    setWeights(weights);
+    kinematic_equation_ = setKinematicEquation();
+}
+
 void Mpc::setWeights(vector<double> weights) {
     //cout << "setweights" << endl;
     Q_(0, 0) = weights[0];
@@ -86,11 +108,6 @@ bool Mpc::solve(CartesianState& current_state,
         S = opti.variable(2, N_ + 1);
         //第一个时间步（索引为0）表示当前时刻的状态 后面N_个时间步表示未来N_个时刻的状态和U对应
         U = opti.variable(2, N_);
-
-        // 设置初始值
-        opti.set_initial(X, initX);
-        opti.set_initial(U, initU);
-        opti.set_initial(S, initS);
 
         MX x = X(0, all);
         MX y = X(1, all);
@@ -162,6 +179,23 @@ bool Mpc::solve(CartesianState& current_state,
         opti.subject_to(acc_min_ <= acc <= acc_max_);
         opti.subject_to(delta_min_ <= delta <= delta_max_);
         // cout << "set lu constrains success" << endl;
+
+
+        //goal cons
+        if(hypot(goal_pose_(0) - ref_states_.back().x, goal_pose_(1) - ref_states_.back().y) < 1e-4) {
+            ROS_WARN("enter final heading planning, ref(%f, %f, %f), local(%f, %f, %f, %f)", goal_pose_(0), goal_pose_(1), goal_pose_(2), ref_states_.back().x, ref_states_.back().y, ref_states_.back().theta, ref_states_.back().speed);
+            DM X_end = DM::zeros(4);
+            X_end(0) = goal_pose_(0);
+            X_end(1) = goal_pose_(1);
+            X_end(2) = 0.0;
+            X_end(3) = goal_pose_(2);
+            initX(all, N_) = X_end;
+            opti.subject_to(X(all, N_) == X_end);
+        }
+        else {
+            ROS_WARN("not enter final heading planning, ref(%f, %f, %f), local(%f, %f, %f, %f)", goal_pose_(0), goal_pose_(1), goal_pose_(2), ref_states_.back().x, ref_states_.back().y, ref_states_.back().theta, ref_states_.back().speed);
+        }
+
 
         //set obstacle constraints
         int margin = sqrt(2) + 0.5;
@@ -237,6 +271,11 @@ bool Mpc::solve(CartesianState& current_state,
             }
         }
         // cout << "set obstacle constrains success" << endl;
+
+        // 设置初始值
+        opti.set_initial(X, initX);
+        opti.set_initial(U, initU);
+        opti.set_initial(S, initS);
 
         //set solver
         casadi::Dict solver_opts; // 设置求解器选项
