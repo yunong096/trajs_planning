@@ -13,6 +13,7 @@ public:
 
     std::function<double(double)> func;
 
+    GaussLegendreIntegration(){};
     GaussLegendreIntegration(NodeCount count) {
         switch (count) {
             case NodeCount::Three:

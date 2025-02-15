@@ -186,6 +186,9 @@ void Dynamic_routing::thread_routing(void)
           is_set_refline = true;
           ROS_WARN("global success!");
           publishPathMarker(smoothed_point2d);
+          goal_pose_.x = refline.x.back();
+          goal_pose_.y = refline.y.back();
+          goal_pose_.z = refline.theta.back();
         }
       }
       else {
@@ -219,14 +222,107 @@ void Dynamic_routing::thread_routing(void)
     }
 
     if(is_set_refline) {
-      // if(hypot(init_car_state.x - goal_pose_.x, init_car_state.y - goal_pose_.y) < 0.1) {
-      if(hypot(init_car_state.x - refline.x.back(), init_car_state.y - refline.y.back()) < 0.1) {
+      if(hypot(init_car_state.x - goal_pose_.x, init_car_state.y - goal_pose_.y) < 0.01) {
         //结束，不能放在if外，会导致一开始就到达了终点
         ROS_WARN("heading goal arrived!");
-        
+        // ros::Duration(0.5 - 0.001 - elapsed_seconds2.count()).sleep();
+
+        //先用只有两段进行test
+        if(IS_USING_DF_GLOBAL_PLANNER) {
+          traj = (*df_opt_->getMinJerkOptPtr())[1].getTraj(-1); //先用只有两段进行test
+          best_path = traj.GetResult(0.1);
+          //---------------------------------发布轨迹---------------------------------//
+          waypoint_msgs::WaypointArray local_waypoints;
+          local_waypoints.header.frame_id = Frame_id;
+          local_path_array.markers.resize(best_path.size());
+          for (int i = 0; i < best_path.size(); i++)
+          {
+            waypoint_msgs::Waypoint point;
+            point.pose.pose.position.x = best_path[i].x;
+            point.pose.pose.position.y = best_path[i].y;
+            point.twist.twist.linear.x = best_path[i].speed;
+            point.twist.twist.linear.y = 0;
+            local_waypoints.waypoints.emplace_back(point);
+
+            visualization_msgs::Marker marker;
+            marker.header.stamp = ros::Time::now();
+            marker.header.frame_id = "map";
+            marker.ns = "path";
+            // marker.lifetime = ros::Duration(0.6); // Marker将在5秒后自动消失
+            marker.id = i;
+            marker.type = visualization_msgs::Marker::SPHERE;
+            marker.action = visualization_msgs::Marker::ADD;
+            marker.pose.position.x = best_path[i].x;
+            marker.pose.position.y = best_path[i].y;
+            marker.pose.position.z = 0.3;
+            marker.pose.orientation.w = 1.0;  // Quaternion representing no rotation
+            marker.scale.x = 0.4;
+            marker.scale.y = 0.4;
+            marker.scale.z = 0.4;
+            marker.color.a = 1.0;  // Alpha (opacity)
+            marker.color.r = 1.0;  // Red
+            marker.color.g = 0.0;  // Green
+            marker.color.b = 0.0;  // Blue
+            local_path_array.markers[i] = (marker);
+          }
+          // Publish the marker array
+          local_waypoints_pub_.publish(local_path_array);
+          local_paths_trj.publish(local_waypoints);
+
+          //--------------------------------发布加速度---------------------------------//
+          pubLocalPath_a.poses.clear();
+          pubLocalPath_a.header.frame_id = Frame_id;
+          pubLocalPath_a.header.stamp = ros::Time::now();
+          for (size_t i = 0; i < best_path.size(); i++)
+          {
+            geometry_msgs::Pose init_pose;
+            init_pose.position.x = best_path[i].acc;
+            //  init_pose.position.x = 0.2;
+            pubLocalPath_a.poses.push_back(init_pose);
+          }
+          local_paths_a.publish(pubLocalPath_a);
+          //  //--------------------------------发布速度---------------------------------上述waypoints中已经包含速度信息，这里注掉发布速度的部分//   
+          // pubLocalPath_s.poses.clear();
+          // pubLocalPath_s.header.frame_id = Frame_id;
+          // pubLocalPath_s.header.stamp = ros::Time::now();
+          // for (size_t i = 0; i < best_path.size(); i++)
+          // {
+          //   geometry_msgs::Pose init_pose;
+          //   init_pose.position.x = best_path[i].speed;
+          //   pubLocalPath_s.poses.push_back(init_pose);
+          // }
+          // local_paths_s.publish(pubLocalPath_s);
+          //--------------------------------发布角度---------------------------------//
+          pubLocalPath_t.poses.clear();
+          pubLocalPath_t.header.frame_id = Frame_id;
+          pubLocalPath_t.header.stamp = ros::Time::now();
+          for (size_t i = 0; i < best_path.size(); i++)
+          {
+            geometry_msgs::Pose init_pose;
+            init_pose.position.x = best_path[i].theta;
+            pubLocalPath_t.poses.push_back(init_pose);
+          }
+          local_paths_t.publish(pubLocalPath_t);
+          //--------------------------------发布曲率---------------------------------//
+          pubLocalPath_k.poses.clear();
+          pubLocalPath_k.header.frame_id = Frame_id;
+          pubLocalPath_k.header.stamp = ros::Time::now();
+          for (size_t i = 0; i < best_path.size(); i++)
+          {
+            geometry_msgs::Pose init_pose;
+            init_pose.position.x = best_path[i].kappa;
+            // init_pose.position.x = 0;
+            pubLocalPath_k.poses.push_back(init_pose);
+          }
+          local_paths_k.publish(pubLocalPath_k);
+          string aa = "1";
+          start_dynamic.data = aa.c_str();
+          Start_Dynamic.publish(start_dynamic); // 轨迹生成成功，发送move信号
+        }
+
         //泊车轨迹规划
         //读入参考轨迹
-
+        
         //轨迹优化
 
         //轨迹pub

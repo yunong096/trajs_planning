@@ -23,13 +23,19 @@ void DpPlanner::Initialize() {
     l_res = l_hri / (l_num - 1);
 
     s_range.emplace_back(0);
-    double ds_dense = std::max(0.1, std::min(init_sl_state_.ds *t_res, s_hri / (s_num - 1)));
+    // double ds_dense = std::max(0.1, std::min(init_sl_state_.ds *t_res, s_hri / (s_num - 1)));
+    double ds_dense = std::min(s_hri / (s_num - 1), std::max(0.1, init_sl_state_.ds *t_res));
     for (int i = 1; i <= (s_num - 1) / 2; ++i) {
         s_range.emplace_back(ds_dense * i);
     }
     double ds_sparse = (s_hri - ds_dense * (s_num - 1) / 2) / ((s_num - 1) / 2);
-    for (int i = 1; i <= (s_num - 1) / 2; ++i) {
-        s_range.emplace_back(ds_dense * (s_num - 1) / 2 + ds_sparse * i);
+    if(ds_sparse > 1e-6) {
+        for (int i = 1; i <= (s_num - 1) / 2; ++i) {
+            s_range.emplace_back(ds_dense * (s_num - 1) / 2 + ds_sparse * i);
+        }
+    }
+    else{
+        s_num = s_range.size();
     }
     
     linspace(-l_hri / 2, l_hri / 2, l_num,  l_range);
@@ -147,6 +153,7 @@ void DpPlanner::DynamicProgramming() {
                     // ROS_ERROR("Find S failed");
                     // ROS_ERROR("Find S failed, need_S: %f, all_S: %f", s + init_sl_state_.s, traj_.Pieces_allS.back());
                     // return;
+                ROS_WARN("Find S failed, need_S: %f, all_S: %f", s + init_sl_state_.s, traj_.Pieces_allS.back());
                     piece_ind = traj_.Pieces_S.size() - 1;
                 }
                 double t = traj_.findTInSegment(piece_ind, relative_s);

@@ -367,8 +367,8 @@ class Trajectory {
   {
      GlobalPathPoint res;
       pieces[piece_idx].getState(relative_t, res);
-      double relative_s = computeArcLength(piece_idx, 0.0, relative_t);
-      if(piece_idx > 0) res.s = relative_s + + Pieces_allS[piece_idx - 1];
+      double relative_s = computeArcLength2(piece_idx, 0.0, relative_t);
+      if(piece_idx > 0) res.s = relative_s + Pieces_allS[piece_idx - 1];
       else res.s = relative_s;
     // ROS_WARN("left getState");
       return res;
@@ -380,7 +380,8 @@ class Trajectory {
     Pieces_allS = vector<double>(N, 0);
     for(int i = 0; i < N; ++i) {
       double piece_t = pieces[i].getDuration();
-      Pieces_S[i] = computeArcLength(i, 0.0, piece_t, 1000);
+      // Pieces_S[i] = computeArcLength(i, 0.0, piece_t, 1000);
+      Pieces_S[i] = computeArcLength2(i, 0.0, piece_t, 5);
       if(i == 0) Pieces_allS[i] = Pieces_S[i];
       else Pieces_allS[i] = Pieces_allS[i - 1] + Pieces_S[i];
       // cout << Pieces_S[i] << ", " << Pieces_allS[i] << endl;
@@ -399,12 +400,16 @@ class Trajectory {
         return length;
     }
 
-    double computeArcLength2(int piece_idx, double t_start, double t_end) const {
+    double computeArcLength2(int piece_idx, double t_start, double t_end, int num_node = 3) const {
       std::function<double(double)> func = [this, piece_idx](double t) {
         auto dpos = pieces[piece_idx].getdSigma(t);
         return std::sqrt(dpos(0) * dpos(0) +  dpos(1) * dpos(1));
       };
-      GaussLegendreIntegration integrator(GaussLegendreIntegration::NodeCount::Three);
+      GaussLegendreIntegration integrator;
+      if (num_node == 3)
+        integrator = GaussLegendreIntegration(GaussLegendreIntegration::NodeCount::Three);
+       else if (num_node == 5)
+        integrator = GaussLegendreIntegration(GaussLegendreIntegration::NodeCount::Five);
       integrator.func = func;
       double result = integrator.integrate(t_start, t_end);
       return result;
@@ -426,10 +431,11 @@ class Trajectory {
     }
 
     // 在段内通过牛顿法求解最近点对应的t
-    Vector2d findMinPtInSegment(const int piece_idx, Vector2d pos, double closest_t) const {
+    Vector2d findMinPtInSegment(const int piece_idx, Vector2d pos, double init_t) const {
       // ROS_WARN("enter NewTon Method");
+      double closest_t = init_t;
       double t = closest_t; // 初始猜测
-      double tolerance = 1e-6;
+      double tolerance = 1e-3;
       double epsilon = 1e-8; // 防止除零
       double minDistanceSquared = std::numeric_limits<double>::max();
       double x0 = pos(0), y0 = pos(1);
@@ -454,7 +460,8 @@ class Trajectory {
           double hessD = 2 * ((dx * dx + dy * dy) + (x - x0) * ddx + (y - y0) * ddy);
   
           if (std::abs(gradD) < tolerance || std::abs(hessD) < epsilon) {
-              break;
+              // cout << "find cloest!" << endl;
+              return Vector2d(std::sqrt(minDistanceSquared), closest_t);
           }
   
           double deltaT = -gradD / hessD;
@@ -468,9 +475,27 @@ class Trajectory {
             }
       }
   
-      return Vector2d(std::sqrt(minDistanceSquared), closest_t);
+          return Vector2d(hypot(pieces[piece_idx].getPos(init_t)(0) - x0, pieces[piece_idx].getPos(init_t)(1) - y0), init_t);
     }
 
+    vector<CartesianState> GetResult(double gap) {
+      // 优化结果密集采样输出
+      vector<CartesianState> final_path;
+      const double total_t = getTotalDuration();
+      const int duration_size = std::ceil(total_t / gap);
+      int count = 0;
+      for (double t = 0.0; t < total_t; t += gap, ++count) {
+        CartesianState state;
+        const auto pieceIdx = locatePieceIdx(t);
+        // cout << "relative_t: " << pieceIdx.first << ", piece_idx" << pieceIdx.second << endl;
+        const auto &piece = pieces[pieceIdx.first];
+        const double relative_t = pieceIdx.second;
+        piece.getState(relative_t, state);
+        // state->set_t(t);
+        final_path.emplace_back(state);
+      }
+      return final_path;
+    }
     
   
   inline int getPieceNum() const { return pieces.size(); }

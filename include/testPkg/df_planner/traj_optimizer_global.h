@@ -244,7 +244,7 @@ namespace plan_manage {
         const double total_t = final_traj.getTotalDuration();
         const int duration_size = std::ceil(total_t / gap);
         int count = 0;
-        for (double t = 0.0; t < total_t; t += gap, ++count) {
+        for (double t = gap; t < total_t; t += gap, ++count) {
           CartesianState state;
           const auto pieceIdx = final_traj.locatePieceIdx(t);
           // cout << "relative_t: " << pieceIdx.first << ", piece_idx" << pieceIdx.second << endl;
@@ -256,17 +256,6 @@ namespace plan_manage {
           // if(count < 5)
             // cout << "df_state: " << state.x << ", " << state.y << ", " << state.speed << ", " << state.theta << ", " << state.acc << ", " << state.kappa << endl;
         }
-        // cout << "final_path_size: " <<  final_path.size() << endl;
-        // const auto &piece_positions = final_traj.getPositions();
-        // for (int j = 0; j < piece_positions.cols(); j++) {
-        //   if (j == 0) {
-        //     cout << "起点：" << piece_positions(0, j) << ", " << piece_positions(1, j) << endl;
-        //   } else if (j == piece_positions.cols() - 1) {
-        //     cout << "终点：" << piece_positions(0, j) << ", " << piece_positions(1, j) << endl;
-        //   } else {
-        //     cout << "中间点：" << piece_positions(0, j) << ", " << piece_positions(1, j) << endl;
-        //   }
-        // }
       }
       return final_path;
     }
@@ -282,7 +271,6 @@ namespace plan_manage {
         const int duration_size = std::ceil(total_t / gap);
         int count = 0;
         for (double t = 0.0; t < total_t; t += gap, ++count) {
-          CartesianState state;
           const auto pieceIdx = final_traj.locatePieceIdx(t);
           // cout << "relative_t: " << pieceIdx.first << ", piece_idx" << pieceIdx.second << endl;
           const auto &piece = final_traj[pieceIdx.first];
@@ -294,7 +282,6 @@ namespace plan_manage {
       }
       ROS_WARN("finish to getRes");
     }
-
   };
 
 

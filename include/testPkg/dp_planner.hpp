@@ -143,41 +143,47 @@ private:
         if(df_refline_ == nullptr) ROS_ERROR("df refline is null");
         GlobalPathPoint ref_state = GlobalPathPoint{0, 0, 0, 0, 0, 0};
         MatrixXd pos_matrix= traj_.getPositions();
-        double min_dist = hypot(car_state.x - (*df_refline_->getMinJerkOptPtr())[0].getHeadX(), car_state.y - car_state.x - (*df_refline_->getMinJerkOptPtr())[0].getHeadY());
+        double min_dist = 1e6;
         int min_ind = 0;
-        for(int i = 1; i < pos_matrix.cols() + 1; ++i) {
-            double dx = car_state.x - pos_matrix(0, i - 1);
-            double dy = car_state.y - pos_matrix(1, i - 1);
+        for(int i = 0; i < pos_matrix.cols(); ++i) {
+            double dx = car_state.x - pos_matrix(0, i);
+            double dy = car_state.y - pos_matrix(1, i);
             double dist = hypot(dx, dy);
             if (dist < min_dist) {
                 min_dist = dist;
                 min_ind = i;
             }
         }
-        // cout << "min_ind: " << min_ind << ", min_dist: " << min_dist << endl;
+        cout << "min_ind: " << min_ind << ", min_dist: " << min_dist << endl;
 
-        if(min_ind > 0 && min_ind < pos_matrix.cols()) {
+        if(min_ind > 0 && min_ind < pos_matrix.cols() - 1) {
             // ROS_WARN("enter inner");
             double t = traj_.getDurations()[min_ind - 1];
             Vector2d min_res = traj_.findMinPtInSegment(min_ind - 1, cur_pos, t);
-            if (min_res(1) < min_dist) //最近点在该段上且不是端点
+            if (!(fabs(min_res(1) - t) < 1e-8)) { //最近点不是端点 
                 ref_state = traj_.getState(min_res(1), min_ind - 1);
+            }
             else {
+                // cout << "min_dis0: " <<min_res(0) << endl;
+                ROS_WARN("last part");
                 min_res = traj_.findMinPtInSegment(min_ind, cur_pos, 0.0);
                 ref_state = traj_.getState(min_res(1), min_ind);
             }
-            // cout << "min_dis: " <<min_res(1) << endl;
+            // cout << "min_dis: " <<min_res(0) << endl;
         } 
         else if (min_ind == 0) {
             // ROS_WARN("enter start");
             Vector2d min_res = traj_.findMinPtInSegment(0, cur_pos, 0.0);
             ref_state = traj_.getState(min_res(1), 0);
+            // cout << "min_dis: " <<min_res(0) << endl;
         }
-        else if (min_ind == pos_matrix.cols()) {
+        else {
             // ROS_WARN("enter end");
             double t = traj_.getDurations()[min_ind - 1];
             Vector2d min_res = traj_.findMinPtInSegment(min_ind - 1, cur_pos, t);
             ref_state = traj_.getState(min_res(1), min_ind - 1);
+            // cout << "min_dis: " <<min_res(0) << endl;
+
         }                                                                                                       
         double del_theta = car_state.theta - ref_state.theta;
         // double kappa_x = tan(car_state.delta) / L;
@@ -237,6 +243,7 @@ private:
             if(piece_ind == -1) {
                 // ROS_ERROR("Find S failed, need_S: %f, all_S: %f", fre_state.s, traj_.Pieces_allS.back());
                 // return;
+                ROS_WARN("Find S failed, need_S: %f, all_S: %f", fre_state.s, traj_.Pieces_allS.back());
                 piece_ind = traj_.Pieces_S.size() - 1;
             }
             double t = traj_.findTInSegment(piece_ind, raletive_s);
@@ -248,11 +255,12 @@ private:
         car_state.theta = ref_state.theta + atan2(fre_state.dl / (1 - ref_state.kappa * fre_state.l), 1);
         car_state.speed = hypot(fre_state.ds * (1 - ref_state.kappa * fre_state.l), fre_state.ds * fre_state.dl);
         double del_theta = car_state.theta - ref_state.theta;
+        // cout << "del_theta: " << del_theta << endl;
         double temp_kappa = ((fre_state.ddl + (ref_state.dkappa * fre_state.l + ref_state.kappa * fre_state.dl) * tan(del_theta)) *
                             (cos(del_theta) * cos(del_theta) / (1 - ref_state.kappa * fre_state.l)) + ref_state.kappa) *
                             cos(del_theta) / (1 - ref_state.kappa * fre_state.l);
-        cout << "init_delta: " << atan2(2.7 * temp_kappa, 1) << endl;
-        cout << "ref_state:(曲率) " << ref_state.kappa << ", " << ref_state.dkappa << endl;
+        // cout << "init_delta: " << atan2(2.7 * temp_kappa, 1) << endl;
+        // cout << "ref_state:(曲率) " << ref_state.kappa << ", " << ref_state.dkappa << endl;
         car_state.kappa = temp_kappa;
         car_state.acc = fre_state.dds * (1 - ref_state.kappa * fre_state.l) / cos(del_theta) +
                     pow(fre_state.dds, 2) / cos(del_theta) *
@@ -304,6 +312,7 @@ private:
             if(piece_ind == -1) {
                 // ROS_ERROR("Find S failed");
                 // return;
+                ROS_WARN("Find S failed, need_S: %f, all_S: %f", s, traj_.Pieces_allS.back());
                 piece_ind = traj_.Pieces_S.size() - 1;
             }
             double t = traj_.findTInSegment(piece_ind, relative_s);
