@@ -8,6 +8,7 @@
 #include <iostream>
 #include "DynamicPathStruct.hpp"
 #include "Obstacles.hpp"
+#include "MovingObs.hpp"
 #include "CoarsePathGenerator.hpp"
 using namespace casadi;
 

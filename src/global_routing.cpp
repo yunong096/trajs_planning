@@ -204,9 +204,12 @@ GlobalRouting::GlobalRouting()
       obstacle_MarkerArray.markers.emplace_back(marker);
       //obs_pub.publish(obstacle_MarkerArray);
     }
-    MovingObs::num = 1;
-		MovingObs::obs_traj.resize(1);
-    MovingObs::obs_traj[0] = MovingObs::loadTrajectoryData("/home/lynnn/test_ws/parking.csv");
+    MovingObs::num = 3;
+		MovingObs::obs_traj.resize(3);
+    MovingObs::obs_traj[0] = MovingObs::loadTrajectoryData("/home/lynnn/test_ws/opposite.csv");
+    MovingObs::obs_traj[1] = MovingObs::loadTrajectoryData("/home/lynnn/test_ws/following.csv");
+    MovingObs::obs_traj[2] = MovingObs::loadTrajectoryData("/home/lynnn/test_ws/parking.csv");
+
         // obs_traj[1] = loadTrajectoryData("following.csv");
     
 
@@ -258,32 +261,40 @@ void GlobalRouting::thread_routing()
   while (n.ok())
   {
     //发布障碍可视化
-      if(obstacle_MarkerArray.markers.size() > (obs.getNum() -  obs.getMoveInds().size() + 1))
-        obstacle_MarkerArray.markers.resize(obs.getNum() -  obs.getMoveInds().size() + 1);
-      for(auto& j : obs.getMoveInds()) { 
-        // cout << "moving ind: " << j << endl;
-        visualization_msgs::Marker marker;
-        auto cur_obs = obs.getObs()[j];
-        MatrixXd poly(2, cur_obs.vertex_x.size());
-        for (int i = 0; i < cur_obs.vertex_x.size(); ++i) {
-          poly(0, i) = cur_obs.vertex_x[i];
-          poly(1, i) = cur_obs.vertex_y[i];
-        }
-        poly += cur_obs.speed * MatrixXd::Ones(1, 4) * 0.1 *  frame_count; 
-        Turn_obstacles_into_squares(marker, poly, j + 1);
-        obstacle_MarkerArray.markers.emplace_back(marker);
-      }
-      
-      // // if(obstacle_MarkerArray.markers.size() > (obs.getNum() -  MovingObs::num + 1))
-      // if(obstacle_MarkerArray.markers.size() > 10)
-      //     obstacle_MarkerArray.markers.resize(10);
-      //   for(auto& traj : MovingObs::obs_traj) { 
-      //     // cout << "moving ind: " << j << endl;
-      //     visualization_msgs::Marker marker;
-      //     auto& cur_obs = traj[frame_count];
-      //     Turn_moving_obstacles_into_squares(marker, cur_obs, 10);
-      //     obstacle_MarkerArray.markers.emplace_back(marker);
+      // if(obstacle_MarkerArray.markers.size() > (obs.getNum() -  obs.getMoveInds().size() + 1))
+      //   obstacle_MarkerArray.markers.resize(obs.getNum() -  obs.getMoveInds().size() + 1);
+      // for(auto& j : obs.getMoveInds()) { 
+      //   // cout << "moving ind: " << j << endl;
+      //   visualization_msgs::Marker marker;
+      //   auto cur_obs = obs.getObs()[j];
+      //   MatrixXd poly(2, cur_obs.vertex_x.size());
+      //   for (int i = 0; i < cur_obs.vertex_x.size(); ++i) {
+      //     poly(0, i) = cur_obs.vertex_x[i];
+      //     poly(1, i) = cur_obs.vertex_y[i];
       //   }
+      //   poly += cur_obs.speed * MatrixXd::Ones(1, 4) * 0.1 *  frame_count; 
+      //   Turn_obstacles_into_squares(marker, poly, j + 1);
+      //   obstacle_MarkerArray.markers.emplace_back(marker);
+      // }
+      
+      // if(obstacle_MarkerArray.markers.size() > (obs.getNum() -  MovingObs::num + 1))
+      if(obstacle_MarkerArray.markers.size() > 10)
+          obstacle_MarkerArray.markers.resize(10);
+        int ind = 10;
+        for(auto& traj : MovingObs::obs_traj) { 
+          // cout << "moving ind: " << j << endl;
+          visualization_msgs::Marker marker;
+          if(frame_count < traj.size()) {
+            auto& cur_obs = traj[frame_count];
+            Turn_moving_obstacles_into_squares(marker, cur_obs, ind);
+          }
+          else {
+            auto& cur_obs = traj.back();
+           Turn_moving_obstacles_into_squares(marker, cur_obs, ind);
+          }
+          obstacle_MarkerArray.markers.emplace_back(marker);
+          ind++;
+        }
       
     // Start_dynamic 局部规划轨迹开始生成
     if (is_start_pose_set == true && is_goal_pose_set == true && Start_dynamic == "1")
@@ -299,10 +310,17 @@ void GlobalRouting::thread_routing()
             // msg_ros.z = -1;
             // cout << "当前ind: " << simulation_count_ <<  ",  当前位置: (" << cur_pose.x << ", "  << cur_pose.y << "),  当前控制量： " << Tc  <<  ", " << turn_angle << endl;
             
-            //不再模拟控制，直接传入坐标
-            msg_ros.x = local_waypoints[simulation_count_].x;           // 加速度
-            msg_ros.y = local_waypoints[simulation_count_].y;  //转角
-            msg_ros.z = thetas[simulation_count_];
+            if(simulation_count_ < local_waypoints.size()) {
+              //不再模拟控制，直接传入坐标
+              msg_ros.x = local_waypoints[simulation_count_].x;           // 加速度
+              msg_ros.y = local_waypoints[simulation_count_].y;  //转角
+              msg_ros.z = thetas[simulation_count_];
+            }
+            else {
+              msg_ros.x = local_waypoints.back().x;           // 加速度
+              msg_ros.y = local_waypoints.back().y;  //转角
+              msg_ros.z = thetas.back();
+            }
             
             // 测试用
             // Tc = 0.2;

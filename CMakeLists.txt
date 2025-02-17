@@ -189,6 +189,7 @@ add_executable(cfstest  src/main_test.cpp
                                   ) 
 
 add_executable(dynamic_routing  src/dynamic_routing_node.cpp 
+                                  src/MovingObs.cpp
                                   src/dynamic_routing.cpp
                                   src/SCCFS.cpp 
                                   src/CoarsePathGenerator.cpp

@@ -52,6 +52,7 @@ void DpPlanner::Initialize() {
     // for (int t_idx = 1; t_idx < t_num; ++t_idx) {
         // double t = t_idx * t_res;    
         double t = t_hri;
+
         //测试用，模拟障碍物位置，实际接入预测结果（p>0.2以上置信度，且差距小于0.05) 
         for(auto j : obj_.getMoveInds()) { 
             auto cur_obs = obj_.getObs()[j];
@@ -74,6 +75,12 @@ void DpPlanner::Initialize() {
                 }
             } 
         }
+
+        //判断是不是停车
+
+        //前面有无同向车
+
+        
     // }
     if (new_hri > 0)  {
         s_hri = new_hri;

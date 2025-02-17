@@ -2,6 +2,7 @@
 #include <iostream>
 #include <fstream>
 #include <sstream>
+
 // using namespace plan_manage;
 // 全局变量
 geometry_msgs::Vector3 start_pose_;   // 起点
@@ -104,6 +105,12 @@ Dynamic_routing::Dynamic_routing(void)
   start_dynamic.data = aa.c_str();
   Start_Dynamic.publish(start_dynamic);
 
+  MovingObs::num = 3;
+  MovingObs::obs_traj.resize(3);
+  MovingObs::obs_traj[0] = MovingObs::loadTrajectoryData("/home/lynnn/test_ws/opposite.csv");
+  MovingObs::obs_traj[1] = MovingObs::loadTrajectoryData("/home/lynnn/test_ws/following.csv");
+  MovingObs::obs_traj[2] = MovingObs::loadTrajectoryData("/home/lynnn/test_ws/parking.csv");
+
   sleep(0.5);
   routing_thread_ = new boost::thread(boost::bind(&Dynamic_routing::thread_routing, this));
 }
@@ -203,6 +210,18 @@ void Dynamic_routing::thread_routing(void)
           // smoothed_point2d.push_back(GlobalPathPoint(refline.theta[i], refline.kappa[i], refline.dkappa[i], refline.s[i], refline.x[i], refline.y[i]));
           smoothed_point2d.push_back(GlobalPathPoint(refline.theta[i], refline.kappa[i], 0, 0, refline.x[i], refline.y[i]));
         }
+        std::ofstream file("/home/lynnn/test_ws/df_parking copy.txt");
+        if (!file.is_open()) {
+            std::cerr << "Failed to open file: /home/lynnn/test_ws/df_parking.txt" << std::endl;
+            return;
+        }
+        // 设置输出格式，保留小数点后6位
+        file << std::fixed << std::setprecision(6);
+        for(int i = smoothed_point2d.size() - 60 - 78; i < smoothed_point2d.size() - 78; ++i) {
+          file << smoothed_point2d[i].x << " " << smoothed_point2d[i].y << "\n";
+        }
+          file.close();
+
         if (res > 0) {
           is_set_refline = true;
           ROS_WARN("global success!");
@@ -231,6 +250,21 @@ void Dynamic_routing::thread_routing(void)
         if(IS_USING_DF_GLOBAL_PLANNER) {
           traj = (*df_opt_->getMinJerkOptPtr())[1].getTraj(-1); //先用只有两段进行test
           best_path = traj.GetResult(0.1);
+
+          // std::ofstream file("/home/lynnn/test_ws/df_parking.txt");
+          // if (!file.is_open()) {
+          //     std::cerr << "Failed to open file: /home/lynnn/test_ws/df_parking.txt" << std::endl;
+          //     return;
+          // }
+          // // 设置输出格式，保留小数点后6位
+          // file << std::fixed << std::setprecision(6);
+          // // 写入点数据
+          // for (const auto& point : best_path) {
+          //     file << point.x << " " << point.y << "\n";
+          // }
+          // file.close();
+          // std::cout << "Points written to file: /home/lynnn/test_ws/df_parking.txt" << std::endl;
+
           //---------------------------------发布轨迹---------------------------------//
           waypoint_msgs::WaypointArray local_waypoints;
           local_waypoints.header.frame_id = Frame_id;
@@ -332,6 +366,7 @@ void Dynamic_routing::thread_routing(void)
         // start_dynamic.data = aa.c_str();
         // Start_Dynamic.publish(start_dynamic); 
         is_reach_goal = true;
+        is_set_refline = false;
       }
       if ( !is_reach_goal) {
         //--------------------------------------------------局部轨迹生成--------------------------------------------------//

@@ -21,6 +21,7 @@ struct obs_state {
 // 预测轨迹结构，20s轨迹就可以
 struct Trajectory {
     double time;  // 时间戳
+    string type = "UNSIGNED";
     obs_state cur_state;
     std::vector<std::pair<double, double>> points; // 每 0.1s 的预测位置 (x, y)
     obs_state getPosWithRelativeTime(double rel_t) {
@@ -81,7 +82,7 @@ public:
         if (!file.is_open()) {
             throw std::runtime_error("Unable to open file: " + filename);
         }
-        
+
         std::string line;
         bool header = true; // 跳过第一行标题
         while (std::getline(file, line)) {
@@ -96,6 +97,13 @@ public:
             // 读取时间戳
             std::getline(ss, cell, ',');
             traj.time = std::stod(cell);
+
+            if(filename == "/home/lynnn/test_ws/parking.csv")
+                traj.type = "PARKING";
+            else if(filename == "/home/lynnn/test_ws/opposite.csv")
+                traj.type = "OPPOSITE";
+            else if(filename == "/home/lynnn/test_ws/following.csv")
+                traj.type = "FOLLOWING";
             
             double last_theta = 0;
             // 读取 (x, y) 点对
@@ -107,15 +115,21 @@ public:
             }
              traj.cur_state.x =  traj.points[0].first;
              traj.cur_state.y =  traj.points[0].second;
-             if(traj.points[1].first != traj.points[0].first || traj.points[1].second != traj.points[0].second) {
+            if(traj.points[1].first != traj.points[0].first || traj.points[1].second != traj.points[0].second) {
                 traj.cur_state.theta =  atan2(traj.points[1].second - traj.points[0].second,  traj.points[1].first - traj.points[0].first);
                 last_theta = traj.cur_state.theta;
-             }
-             else
+            }
+            else
                 traj.cur_state.theta =  last_theta;
-             traj.cur_state.v =  hypot(traj.points[1].first - traj.points[0].first, traj.points[1].second - traj.points[0].second) / 0.1;
-            //  cout << "cur_state: " <<   traj.cur_state.x << ", " <<  traj.cur_state.y << ", " <<traj.cur_state.theta <<  endl;
+            if (traj.time >= 3.0 && filename == "/home/lynnn/test_ws/parking.csv")
+                traj.cur_state.theta =   traj.cur_state.theta - M_PI;
+
+            traj.cur_state.v =  hypot(traj.points[1].first - traj.points[0].first, traj.points[1].second - traj.points[0].second) / 0.1;
             data.push_back(traj);
+        }
+        if (filename == "/home/lynnn/test_ws/parking.csv") {
+            cout << "parking set" << endl;
+            data.back().cur_state.theta =  data[data.size() - 2].cur_state.theta;
         }
         file.close();
         return data;

@@ -40,7 +40,7 @@
 import csv
 
 # 读取 waypoints_data.txt 文件
-with open('/home/lynnn/test_ws/parking_points.txt', 'r') as file:
+with open('/home/lynnn/test_ws/df_parking.txt', 'r') as file:
     lines = file.readlines()
 
 # 解析数据
@@ -49,6 +49,7 @@ for line in lines:
     if line.strip():  # 跳过空行
         x, y = map(float, line.split())
         waypoints.append((x, y))
+# waypoints.reverse()
 
 # 生成 CSV 文件
 output_file = 'parking.csv'
@@ -72,8 +73,8 @@ for t in range(len(waypoints)):
             x, y = waypoints[t + i]
         else:
             x, y = waypoints[len(waypoints) - 1]
-        row.append(x)
-        row.append(-y)
+        row.append(x - 2.6 * 3)
+        row.append(y)
     data.append(row)
 
 # 写入CSV文件
