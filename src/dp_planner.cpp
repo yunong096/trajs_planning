@@ -49,39 +49,97 @@ void DpPlanner::Initialize() {
     //2. 跟车，距离为s_obs - s_init - 3.7 - 2.35 - 1，每一帧期望速度为目标车辆速度
     //这里引入跟车的目标车辆，测试用
     double new_hri = 0;
-    // for (int t_idx = 1; t_idx < t_num; ++t_idx) {
-        // double t = t_idx * t_res;    
-        double t = t_hri;
 
-        //测试用，模拟障碍物位置，实际接入预测结果（p>0.2以上置信度，且差距小于0.05) 
-        for(auto j : obj_.getMoveInds()) { 
-            auto cur_obs = obj_.getObs()[j];
-            if(cur_obs.speed(0) > 0){ //同向
-                MatrixXd poly(2, cur_obs.vertex_x.size());
-                for (int i = 0; i < cur_obs.vertex_x.size(); ++i) {
-                    poly(0, i) = cur_obs.vertex_x[i];
-                    poly(1, i) = cur_obs.vertex_y[i];
+        //先判断是否有正在停车的车辆
+        for(auto& traj : MovingObs::obs_traj) {
+            if(traj.type == "PARKING") {
+                CartesianState obs_cartesian;
+                CartesianState end_obs_cartesian;
+                if(5 * frame_count < traj.trajs.size()) {
+                    auto& cur_obs = traj.trajs[5 * frame_count];
+                    obs_cartesian = CartesianState(cur_obs.cur_state.x + 1.35 * cos(cur_obs.cur_state.theta), cur_obs.cur_state.y + 1.35* sin(cur_obs.cur_state.theta), cur_obs.cur_state.theta, cur_obs.cur_state.v, 0, 0);
                 }
-                poly += cur_obs.speed * MatrixXd::Ones(1, 4) * (0.5 *  frame_count + t); 
-                
-                CartesianState obs_cartesian((poly(0, 0) +  poly(0, 1)) / 2, (poly(1,1) + poly(1,2)) / 2, 0, 1, 0, 0);
+                else {
+                    auto& cur_obs =  traj.trajs.back();
+                    obs_cartesian = CartesianState(cur_obs.cur_state.x + 1.35 * cos(cur_obs.cur_state.theta), cur_obs.cur_state.y + 1.35* sin(cur_obs.cur_state.theta), cur_obs.cur_state.theta, cur_obs.cur_state.v, 0, 0);
+                }
                 FrenetState obs_frenet;
                 CarToFrenet(obs_cartesian, obs_frenet);
-                // cout << "obs_frenet:" << obs_frenet.s << ", " << obs_frenet.l << endl;
-                // cout << "cur_frenet:" << init_sl_state_.s << ", " << init_sl_state_.l << endl;
-                if(obs_frenet.s - init_sl_state_.s - 1 - 2.35 - 3.7 < s_range[s_range.size() -1]) {
-                    if(new_hri > 0 || obs_frenet.l < 3)
-                    new_hri = max(new_hri, obs_frenet.s - init_sl_state_.s - 1 - 2.35 - 3.7);
+                
+                auto& end_obs = traj.trajs.back();
+                end_obs_cartesian = CartesianState(end_obs.cur_state.x + 1.35 * cos(end_obs.cur_state.theta), end_obs.cur_state.y + 1.35* sin(end_obs.cur_state.theta), end_obs.cur_state.theta, end_obs.cur_state.v, 0, 0);
+                FrenetState end_obs_frenet;
+                CarToFrenet(end_obs_cartesian, end_obs_frenet);
+
+                if(end_obs_frenet.s > obs_frenet.s)  {//认为跟车
+                    cout << "parking的跟车阶段" << endl;
+                    if(obs_frenet.s - init_sl_state_.s - 1 - 2.35 - 3.7 < s_range[s_range.size() -1]) {
+                        if(fabs(obs_frenet.l) < 3)
+                            new_hri =  obs_frenet.s - init_sl_state_.s - 1 - 2.35 - 3.7 + 6.0 * obs_frenet.ds; //考虑这里是起始点的s，往上加一点
+                    }
+                }
+                else if(fabs(obs_frenet.l) < 4){
+                    cout << "parking的停车阶段" << endl;
+                    if(end_obs_frenet.s - init_sl_state_.s - 3.7- 2.6 < s_range[s_range.size() -1]) {
+                            new_hri = end_obs_frenet.s - init_sl_state_. s - 3.7 - 2.6;
+                    }
                 }
             } 
         }
 
-        //判断是不是停车
+        //再判断是否有同向的车辆
+        for(auto& traj : MovingObs::obs_traj) {
+            if(traj.type == "FOLLOWING") {
+                CartesianState obs_cartesian;
+                if(5 * frame_count < traj.trajs.size()) {
+                    auto& cur_obs = traj.trajs[5 * frame_count];
+                    obs_cartesian = CartesianState(cur_obs.points.back().x + 1.35 * cos(cur_obs.points.back().theta), cur_obs.points.back().y + 1.35* sin(cur_obs.points.back().theta), cur_obs.points.back().theta, cur_obs.points.back().v, 0, 0);
+                }
+                else {
+                    auto& cur_obs =  traj.trajs.back();
+                    obs_cartesian = CartesianState(cur_obs.points.back().x + 1.35 * cos(cur_obs.points.back().theta), cur_obs.points.back().y + 1.35* sin(cur_obs.points.back().theta), cur_obs.points.back().theta, cur_obs.points.back().v, 0, 0);
+                }
+                FrenetState obs_frenet;
+                CarToFrenet(obs_cartesian, obs_frenet);
 
-        //前面有无同向车
+                if(obs_frenet.s - init_sl_state_.s > 0 && obs_frenet.s - init_sl_state_.s - 1 - 2.35 - 3.7 < s_range[s_range.size() -1]) {
+                    if(fabs(obs_frenet.l) < 3) {
+                        cout << "update new hri" << endl;
+                        // cout << "frame_count: " << frame_count  << ", obs_frenet:" << obs_frenet.s << ", " << obs_frenet.l << endl;
+                        // cout << "cur_frenet:" << init_sl_state_.s << ", " << init_sl_state_.l << endl;
+                        new_hri = min(new_hri, obs_frenet.s - init_sl_state_.s - 1 - 2.35 - 3.7);
+                    }
+                }
+            } 
+        }
 
-        
-    // }
+        // 测试用，模拟障碍物位置，实际接入预测结果（p>0.2以上置信度，且差距小于0.05) 
+        // double t = t_idx * t_res;    
+        // double t = t_hri;
+        // for(auto j : obj_.getMoveInds()) { 
+        //     auto cur_obs = obj_.getObs()[j];
+        //     if(cur_obs.speed(1) < 0){ //同向
+        //         MatrixXd poly(2, cur_obs.vertex_x.size());
+        //         for (int i = 0; i < cur_obs.vertex_x.size(); ++i) {
+        //             poly(0, i) = cur_obs.vertex_x[i];
+        //             poly(1, i) = cur_obs.vertex_y[i];
+        //         }
+        //         poly += cur_obs.speed * MatrixXd::Ones(1, 4) * (0.5 *  frame_count + t); 
+                
+        //         CartesianState obs_cartesian((poly(0, 0) +  poly(0, 1)) / 2, (poly(1,1) + poly(1,2)) / 2, -M_PI / 2, 1, 0, 0);
+        //         FrenetState obs_frenet;
+        //         CarToFrenet(obs_cartesian, obs_frenet);
+        //         // cout << "obs_frenet:" << obs_frenet.s << ", " << obs_frenet.l << endl;
+        //         // cout << "cur_frenet:" << init_sl_state_.s << ", " << init_sl_state_.l << endl;
+        //         if(obs_frenet.s - init_sl_state_.s - 1 - 2.35 - 3.7 < s_range[s_range.size() -1]) {
+        //             if(new_hri > 0 || fabs(obs_frenet.l) < 3) {
+        //                 cout << "update new hri" << endl;
+        //                 new_hri = max(new_hri, obs_frenet.s - init_sl_state_.s - 1 - 2.35 - 3.7);
+        //             }
+        //         }
+        //     } 
+        // }
+
     if (new_hri > 0)  {
         s_hri = new_hri;
         linspace(0, s_hri, s_num,  s_range);
@@ -108,37 +166,76 @@ void DpPlanner::DynamicProgramming() {
         // ROS_WARN("Start to get obs_vehicles");
         double stop_s = 1e6;
         
-        for(auto j : obj_.getMoveInds()) { 
-            auto cur_obs = obj_.getObs()[j];
-            MatrixXd poly(2, cur_obs.vertex_x.size());
-            for (int i = 0; i < cur_obs.vertex_x.size(); ++i) {
-            poly(0, i) = cur_obs.vertex_x[i];
-            poly(1, i) = cur_obs.vertex_y[i];
-            }
-            poly += cur_obs.speed * MatrixXd::Ones(1, 4) * (0.5 *  frame_count + t); 
-            if(cur_obs.speed(0) < 0){
-                obs_vehicles.emplace_back(Vector3d{(poly(0, 0) +  poly(0, 1)) / 2, (poly(1,1) + poly(1,2)) / 2, -M_PI});
+        // for(auto j : obj_.getMoveInds()) { 
+        //     auto cur_obs = obj_.getObs()[j];
+        //     MatrixXd poly(2, cur_obs.vertex_x.size());
+        //     for (int i = 0; i < cur_obs.vertex_x.size(); ++i) {
+        //     poly(0, i) = cur_obs.vertex_x[i];
+        //     poly(1, i) = cur_obs.vertex_y[i];
+        //     }
+        //     poly += cur_obs.speed * MatrixXd::Ones(1, 4) * (0.5 *  frame_count + t); 
+        //     cout << "ori_obs: " << (poly(0, 0) +  poly(0, 1)) / 2 << ", " << (poly(1,1) + poly(1,2)) / 2 << endl;
+            // if(cur_obs.speed(1) > 0){
+            //     obs_vehicles.emplace_back(Vector3d{(poly(0, 0) +  poly(0, 1)) / 2, (poly(1,1) + poly(1,2)) / 2, M_PI / 2});
+            // }
+            // else {
+            //     CartesianState obs_cartesian((poly(0, 0) +  poly(0, 1)) / 2, (poly(1,1) + poly(1,2)) / 2, -M_PI / 2, 1, 0, 0);
+            //     FrenetState obs_frenet;
+            //     CarToFrenet(obs_cartesian, obs_frenet);
+            //     // cout << "obs_frenet:" << obs_frenet.s << ", " << obs_frenet.l << endl;
+            //     // cout << "cur_frenet:" << init_sl_state_.s << ", " << init_sl_state_.l << endl;
+            //     if(obs_frenet.s - init_sl_state_.s - 2.35 - 3.7 - 1 <= s_range[s_range.size() -1] && std::abs(obs_frenet.l) < 3) {
+            //         stop_s = obs_frenet.s - init_sl_state_.s - 1 - 2.35 - 3.7;
+            //         // cout << "obs_ds: " << obs_frenet.ds << endl;
+            //         if(obs_frenet.s - init_sl_state_.s - 2.35 - 3.7 <= 4 || v_ref < 10/3.6) {
+            //             v_ref = min(10/3.6, obs_frenet.ds);
+            //         }
+            //     }
+            //     else {
+            //         obs_vehicles.emplace_back(Vector3d{(poly(0, 0) +  poly(0, 1)) / 2, (poly(1,1) + poly(1,2)) / 2, -M_PI / 2});
+            //         v_ref = 10 / 3.6;
+            //     }
+            // }
+            // ROS_WARN("obs_vehicles: %f, %f, %f,  time: %f", obs_vehicles[obs_vehicles.size() - 1](0), obs_vehicles[obs_vehicles.size() - 1](1), obs_vehicles[obs_vehicles.size() - 1](2), 0.5 *  frame_count + t);
+        // }
+
+        for(auto& traj : MovingObs::obs_traj) {
+            CartesianState obs_cartesian;
+            int relative_index = (int)(t * 10); //简化，实际应该调用插值函数
+            if(5 * frame_count < traj.trajs.size()) {
+                auto& cur_obs = traj.trajs[5 * frame_count];
+                obs_cartesian = CartesianState(cur_obs.points[relative_index].x + 1.35 * cos(cur_obs.points[relative_index].theta), cur_obs.points[relative_index].y + 1.35* sin(cur_obs.points[relative_index].theta), cur_obs.points[relative_index].theta, cur_obs.points[relative_index].v, 0, 0);
+                // obs_cartesian = CartesianState(cur_obs.points[relative_index].x, cur_obs.points[relative_index].y, cur_obs.points[relative_index].theta, cur_obs.points[relative_index].v, 0, 0);
+                
             }
             else {
-                CartesianState obs_cartesian((poly(0, 0) +  poly(0, 1)) / 2, (poly(1,1) + poly(1,2)) / 2, 0, 1, 0, 0);
+                auto& cur_obs =  traj.trajs.back();
+                obs_cartesian = CartesianState(cur_obs.points[relative_index].x + 1.35 * cos(cur_obs.points[relative_index].theta), cur_obs.points[relative_index].y + 1.35* sin(cur_obs.points[relative_index].theta), cur_obs.points[relative_index].theta, cur_obs.points[relative_index].v, 0, 0);
+            }
+            // cout << "new_obs:" <<  obs_cartesian.x << ", " << obs_cartesian.y << ", " << obs_cartesian.theta<< endl;
+
+            if(traj.type == "OPPOSITE") {
+                obs_vehicles.emplace_back(Vector3d{obs_cartesian.x, obs_cartesian.y, obs_cartesian.theta});
+            }
+            else {
                 FrenetState obs_frenet;
                 CarToFrenet(obs_cartesian, obs_frenet);
                 // cout << "obs_frenet:" << obs_frenet.s << ", " << obs_frenet.l << endl;
                 // cout << "cur_frenet:" << init_sl_state_.s << ", " << init_sl_state_.l << endl;
-                if(obs_frenet.s - init_sl_state_.s - 2.35 - 3.7 - 1 <= s_range[s_range.size() -1] && std::abs(obs_frenet.l) < 3) {
+                if(obs_frenet.s - init_sl_state_.s > 0 && obs_frenet.s - init_sl_state_.s - 2.35 - 3.7 - 1 <= s_range[s_range.size() -1] && std::abs(obs_frenet.l) < 3) {
                     stop_s = obs_frenet.s - init_sl_state_.s - 1 - 2.35 - 3.7;
                     // cout << "obs_ds: " << obs_frenet.ds << endl;
                     if(obs_frenet.s - init_sl_state_.s - 2.35 - 3.7 <= 4 || v_ref < 10/3.6) {
-                        v_ref = min(10/3.6, obs_frenet.ds);
+                        v_ref = min(10/3.6, fabs(obs_frenet.ds));
                     }
                 }
                 else {
-                    obs_vehicles.emplace_back(Vector3d{(poly(0, 0) +  poly(0, 1)) / 2, (poly(1,1) + poly(1,2)) / 2, -M_PI});
+                    obs_vehicles.emplace_back(Vector3d{obs_cartesian.x, obs_cartesian.y, obs_cartesian.theta});
                     v_ref = 10 / 3.6;
                 }
-            }
-            // ROS_WARN("obs_vehicles: %f, %f, %f,  time: %f", obs_vehicles[obs_vehicles.size() - 1](0), obs_vehicles[obs_vehicles.size() - 1](1), obs_vehicles[obs_vehicles.size() - 1](2), 0.5 *  frame_count + t);
+            }            
         }
+
         ROS_WARN("stop_s: %f", stop_s);
         ROS_WARN("v_ref: %f", v_ref);
         for (int s_idx = 0; s_idx < s_num; ++s_idx) {
@@ -160,11 +257,13 @@ void DpPlanner::DynamicProgramming() {
                     // ROS_ERROR("Find S failed");
                     // ROS_ERROR("Find S failed, need_S: %f, all_S: %f", s + init_sl_state_.s, traj_.Pieces_allS.back());
                     // return;
-                ROS_WARN("Find S failed, need_S: %f, all_S: %f", s + init_sl_state_.s, traj_.Pieces_allS.back());
+                    ROS_WARN(", need_S: %f, all_S: %f", s + init_sl_state_.s, traj_.Pieces_allS.back());
                     piece_ind = traj_.Pieces_S.size() - 1;
+                    relative_s = traj_.Pieces_S.back();
                 }
                 double t = traj_.findTInSegment(piece_ind, relative_s);
                 ref_state = traj_.getState(t, piece_ind);
+                // cout << ref_state.x << endl;
             }
             else {
                 int first_ind = -1;

@@ -171,8 +171,8 @@ bool Mpc::solve(CartesianState& current_state,
         //init value 初始化，初始状态赋值第一列所有行
         opti.subject_to(X(all, 0) == X_cur);//第一个时间步（索引为0）表示当前时刻的状态
         //speed angle_speed limit 控制输入的约束
-        opti.subject_to(0 <= x <= 140.0);
-        opti.subject_to(0 <= y <= 80.0);
+        opti.subject_to(-5 <= x <= 140.0);
+        opti.subject_to(-5 <= y <= 80.0);
         opti.subject_to(0 <= v <= v_max_);
         opti.subject_to( -1 < s1 <= 0);
         opti.subject_to( -1 < s2 <= 0);
@@ -182,7 +182,7 @@ bool Mpc::solve(CartesianState& current_state,
 
 
         //goal cons
-        if(hypot(goal_pose_(0) - ref_states_.back().x, goal_pose_(1) - ref_states_.back().y) < 1e-4) {
+        if(hypot(goal_pose_(0) - ref_states_.back().x, goal_pose_(1) - ref_states_.back().y) < 1e-3) {
             ROS_WARN("enter final heading planning, ref(%f, %f, %f), local(%f, %f, %f, %f)", goal_pose_(0), goal_pose_(1), goal_pose_(2), ref_states_.back().x, ref_states_.back().y, ref_states_.back().theta, ref_states_.back().speed);
             DM X_end = DM::zeros(4);
             X_end(0) = goal_pose_(0);
@@ -203,18 +203,101 @@ bool Mpc::solve(CartesianState& current_state,
         for (int i = 0; i < N_ + 1; ++i)
         {
             // for j = 0; j < obs_num; ++j
-            for(auto j : obs.getMoveInds()) { 
+            // for(auto j : obs.getMoveInds()) { 
+            //     //获取障碍物位置
+            //     //测试用，只有一个动态障碍
+            //     // if(current_state.x > 60 && j == 9) continue;
+            //     // if(current_state.y < 65 && j == 10) continue;
+            //     auto cur_obs = obs.getObs()[j];
+            //     MatrixXd poly(2, cur_obs.vertex_x.size());
+            //     for (int k = 0; k < cur_obs.vertex_x.size(); ++k) {
+            //         poly(0, k) = cur_obs.vertex_x[k];
+            //         poly(1, k) = cur_obs.vertex_y[k];
+            //     }
+            //     poly += cur_obs.speed * MatrixXd::Ones(1, 4) * (0.5 *  frame_count + dt_ * i); 
+            //     cout << "ori_obs:" <<  poly(0,0) << ", " << poly(0,1) << endl;
+                
+                
+            //     double margin =sqrt(2); //安全距离
+            //     //后轴约束
+            //     VectorXd alpha;
+            //     double beta, d;
+            //     Vector2d ref_pos(ref_states[i].x, ref_states[i].y);
+            //     d2poly(ref_pos, poly,alpha, beta, d);  // 计算到多边形的距离
+            //     opti.subject_to(alpha(0) * X(0, i) + alpha(1) * X(1, i) + S(0, i) <= beta - margin);
+            //     // opti.subject_to(alpha(0) * X(0, i) + alpha(1) * X(1, i)  <= beta - margin);
+            //     // cout << "alpha1:" << alpha(0) << "," << alpha(1) << "beta:" << beta << "d:" << d << endl;
+
+            //     // //前轴约束
+            //     ref_pos  = Vector2d(ref_states_para_front[2 * i], ref_states_para_front[2 * i + 1]);
+            //     // cout << "ref_pos:" << ref_pos(0) << "," << ref_pos(1) << endl;
+            //     d2poly(ref_pos, poly, alpha, beta, d); // 计算到多边形的距离
+
+            //     //非线性的前轴约束
+            //     // opti.subject_to(alpha(0) *( X(0, i) + 2.7 * cos(X(3, i))) + alpha(1) * (X(1, i) + 2.7 * sin(X(3, i)))+ S(1, i) <= beta - margin);
+            //     // opti.subject_to(alpha(0) *( X(0, i) + 2.7 * cos(X(3, i))) + alpha(1) * (X(1, i) + 2.7 * sin(X(3, i))) <= beta - margin);
+            //     // cout << "alpha2:" << alpha(0) << ", " << alpha(1) << ", beta:" << beta << ", d:" << d << endl;
+                
+            //     //线性前轴约束
+            //     if(i < N_) {
+            //         // MX NEW_X = {X(0, i), X(1, i), X(0, i + 1), X(1, i + 1)};
+            //         MatrixXd A(2, 4);
+            //         A << 1, 0, 0, 0,
+            //                  0, 1, 0, 0; 
+            //         MatrixXd B(2, 4);
+            //         B << 0, 0, 1, 0,
+            //                  0, 0, 0, 1; 
+            //         Vector4d ref_X (ref_states[i].x, ref_states[i].y, 
+            //                                          ref_states[i+1].x, ref_states[i+1].y);
+            //         if(ref_states[i].x == ref_states[i+1].x && ref_states[i].y == ref_states[i+1].y) {
+            //             // ref_X(2) = ref_states[i].x + std::numeric_limits<double>::epsilon() * cos(ref_states[i].theta);
+            //             // ref_X(3) = ref_states[i].y + std::numeric_limits<double>::epsilon() * sin(ref_states[i].theta);
+            //             ref_X =  Vector4d(ref_states[i].x, ref_states[i].y, 
+            //                                          ref_states[i].x + 0.1 * cos(ref_states[i].theta), 
+            //                                          ref_states[i].y + 0.1 * sin(ref_states[i].theta));
+            //         }
+
+            //         // cout << "ref_states:" << ref_states[i].x << "," << ref_states[i].y  << ", " << ref_states[i+1].x << ", " << ref_states[i+1].y<< endl;
+			// 		// 更新约束
+			// 		MatrixXd C = B - A;
+			// 		VectorXd X0 = C *  ref_X;
+			// 		VectorXd fX0 = X0 / X0.norm();
+			// 		MatrixXd dfX0 = C / X0.norm() - X0 * X0.transpose() * C / pow(X0.norm(), 3);
+			// 		MatrixXd L_f = alpha.transpose() * (A + 2.7 * dfX0);
+			// 		double S_f = beta - margin + alpha.transpose() * 2.7 * (dfX0 * ref_X - fX0);
+            //         // cout << "sf: " << S_f << endl;
+            //         // cout << "lf0: " << L_f(0) << ", lf1: " << L_f(1) << ", lf2: " << L_f(2) << ", lf3: " << L_f(3) << endl;
+            //         opti.subject_to(L_f(0) * X(0, i) + L_f(1) * X(1, i) + L_f(2) * X(0, i + 1) + L_f(3) * X(1, i + 1)  + S(1, i) <= S_f);
+            //     }
+            // }
+        
+            for(auto& traj : MovingObs::obs_traj) {
                 //获取障碍物位置
-                //测试用，只有一个动态障碍
-                if(current_state.x > 60 && j == 9) continue;
-                if(current_state.y < 65 && j == 10) continue;
-                auto cur_obs = obs.getObs()[j];
-                MatrixXd poly(2, cur_obs.vertex_x.size());
-                for (int k = 0; k < cur_obs.vertex_x.size(); ++k) {
-                    poly(0, k) = cur_obs.vertex_x[k];
-                    poly(1, k) = cur_obs.vertex_y[k];
+                int relative_index = (int)(10 * dt_ * i);//简化，实际应该调用插值函数
+                MatrixXd poly(2, 4);
+                if(5 * frame_count < traj.trajs.size()) {
+                    auto& cur_obs = traj.trajs[5 * frame_count];
+                    poly(0,0) = cur_obs.points[relative_index].x + 3.7 * cos(cur_obs.points[relative_index].theta) - 1 * sin(cur_obs.points[relative_index].theta);
+                    poly(1,0) = cur_obs.points[relative_index].y + 3.7 * sin(cur_obs.points[relative_index].theta) + 1 * cos(cur_obs.points[relative_index].theta);
+                    poly(0,1) =cur_obs.points[relative_index].x + 3.7 * cos(cur_obs.points[relative_index].theta) + 1 * sin(cur_obs.points[relative_index].theta);
+                    poly(1,1) = cur_obs.points[relative_index].y + 3.7 * sin(cur_obs.points[relative_index].theta) - 1 * cos(cur_obs.points[relative_index].theta);
+                    poly(0,2) = cur_obs.points[relative_index].x - 1 * cos(cur_obs.points[relative_index].theta) + 1 * sin(cur_obs.points[relative_index].theta);
+                    poly(1,2) = cur_obs.points[relative_index].y - 1 * sin(cur_obs.points[relative_index].theta) - 1 * cos(cur_obs.points[relative_index].theta);
+                    poly(0,3) = cur_obs.points[relative_index].x - 1 * cos(cur_obs.points[relative_index].theta) - 1 * sin(cur_obs.points[relative_index].theta);
+                    poly(1,3) = cur_obs.points[relative_index].y - 1 * sin(cur_obs.points[relative_index].theta) + 1 * cos(cur_obs.points[relative_index].theta);
                 }
-                poly += cur_obs.speed * MatrixXd::Ones(1, 4) * (0.5 *  frame_count + dt_ * i); 
+                else {
+                    auto& cur_obs =  traj.trajs.back();
+                    poly(0,0) = cur_obs.points[relative_index].x + 3.7 * cos(cur_obs.points[relative_index].theta) - 1 * sin(cur_obs.points[relative_index].theta);
+                    poly(1,0) = cur_obs.points[relative_index].y + 3.7 * sin(cur_obs.points[relative_index].theta) + 1 * cos(cur_obs.points[relative_index].theta);
+                    poly(0,1) =cur_obs.points[relative_index].x + 3.7 * cos(cur_obs.points[relative_index].theta) + 1 * sin(cur_obs.points[relative_index].theta);
+                    poly(1,1) = cur_obs.points[relative_index].y + 3.7 * sin(cur_obs.points[relative_index].theta) - 1 * cos(cur_obs.points[relative_index].theta);
+                    poly(0,2) = cur_obs.points[relative_index].x - 1 * cos(cur_obs.points[relative_index].theta) + 1 * sin(cur_obs.points[relative_index].theta);
+                    poly(1,2) = cur_obs.points[relative_index].y - 1 * sin(cur_obs.points[relative_index].theta) - 1 * cos(cur_obs.points[relative_index].theta);
+                    poly(0,3) = cur_obs.points[relative_index].x - 1 * cos(cur_obs.points[relative_index].theta) - 1 * sin(cur_obs.points[relative_index].theta);
+                    poly(1,3) = cur_obs.points[relative_index].y - 1 * sin(cur_obs.points[relative_index].theta) + 1 * cos(cur_obs.points[relative_index].theta);
+                }
+                // cout << "new_obs:" <<  poly(0,0) << ", " << poly(0,1) << endl;
                 
                 double margin =sqrt(2); //安全距离
                 //后轴约束
@@ -267,8 +350,8 @@ bool Mpc::solve(CartesianState& current_state,
                     // cout << "lf0: " << L_f(0) << ", lf1: " << L_f(1) << ", lf2: " << L_f(2) << ", lf3: " << L_f(3) << endl;
                     opti.subject_to(L_f(0) * X(0, i) + L_f(1) * X(1, i) + L_f(2) * X(0, i + 1) + L_f(3) * X(1, i + 1)  + S(1, i) <= S_f);
                 }
-
             }
+        
         }
         // cout << "set obstacle constrains success" << endl;
 

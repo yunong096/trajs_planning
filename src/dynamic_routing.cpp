@@ -31,7 +31,7 @@ void Dynamic_routing::start_pose_call_backs(const geometry_msgs::Vector3 &msg)
   }
 }
 
-/*定义起点位置*/
+/*定义终点位置*/
 void Dynamic_routing::goal_pose_call_backs(const geometry_msgs::Vector3 &msg)
 {
   if (!is_set_goal)
@@ -107,9 +107,9 @@ Dynamic_routing::Dynamic_routing(void)
 
   MovingObs::num = 3;
   MovingObs::obs_traj.resize(3);
-  MovingObs::obs_traj[0] = MovingObs::loadTrajectoryData("/home/lynnn/test_ws/opposite.csv");
-  MovingObs::obs_traj[1] = MovingObs::loadTrajectoryData("/home/lynnn/test_ws/following.csv");
-  MovingObs::obs_traj[2] = MovingObs::loadTrajectoryData("/home/lynnn/test_ws/parking.csv");
+  MovingObs::obs_traj[0] = MovingObs::loadTrajectoryData("/home/lynnn/test_ws/opposite1.csv");
+  MovingObs::obs_traj[1] = MovingObs::loadTrajectoryData("/home/lynnn/test_ws/following1.csv");
+  MovingObs::obs_traj[2] = MovingObs::loadTrajectoryData("/home/lynnn/test_ws/parking1.csv");
 
   sleep(0.5);
   routing_thread_ = new boost::thread(boost::bind(&Dynamic_routing::thread_routing, this));
@@ -149,7 +149,7 @@ void Dynamic_routing::thread_routing(void)
       config_.resolution = 0.1;
 
       // 打开输入文件流
-      std::ifstream inFile("/home/lynnn/test_ws/globalpoints_data3.txt");
+      std::ifstream inFile("/home/lynnn/test_ws/globalpoints_data5.txt");
       if(!IS_USING_DF_GLOBAL_PLANNER) 
         inFile =  std::ifstream("/home/lynnn/test_ws/globalpoints_data.txt");
   

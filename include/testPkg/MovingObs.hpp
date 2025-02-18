@@ -21,9 +21,9 @@ struct obs_state {
 // 预测轨迹结构，20s轨迹就可以
 struct Trajectory {
     double time;  // 时间戳
-    string type = "UNSIGNED";
+    // string type = "UNSIGNED";
     obs_state cur_state;
-    std::vector<std::pair<double, double>> points; // 每 0.1s 的预测位置 (x, y)
+    std::vector<obs_state> points; // 每 0.1s 的预测位置 (x, y)
     obs_state getPosWithRelativeTime(double rel_t) {
         obs_state pos; //x,y,theta,v
         double ind_double = rel_t * 10;
@@ -50,17 +50,22 @@ struct Trajectory {
         auto& p1 = points[ind + 1];
 
         // 进行线性插值
-        pos.x = (1 - t) * p0.first + t * p1.first;
-        pos.y = (1 - t) * p0.second + t * p1.second;
+        pos.x = (1 - t) * p0.x + t * p1.x;
+        pos.y = (1 - t) * p0.y + t * p1.y;
 
         // 计算 theta 和 v
-        double dx = p1.first - p0.first;
-        double dy = p1.second - p0.second;
+        double dx = p1.x - p0.x;
+        double dy = p1.y - p0.y;
         pos.theta = std::atan2(dy, dx);
         pos.v = std::sqrt(dx * dx + dy * dy) / 0.1; // 假设时间间隔为 0.1s
 
         return pos;
     };
+};
+
+struct obs_trajs {
+    vector<Trajectory> trajs;
+    string type = "UNDEFINED";
 };
 
 class MovingObs {
@@ -73,10 +78,18 @@ public:
         // obs_traj[2] = loadTrajectoryData("stoping.csv");
 	};
 	static int num;
-	static vector<vector<Trajectory>> obs_traj;
+	static vector<obs_trajs> obs_traj;
 
     // 加载 CSV 数据
-    static std::vector<Trajectory> loadTrajectoryData(const std::string& filename) {
+    static obs_trajs loadTrajectoryData(const std::string& filename) {
+        obs_trajs result;
+        if(filename.substr(0,21) == "/home/lynnn/test_ws/p")
+        result.type = "PARKING";
+        else if(filename.substr(0,21) == "/home/lynnn/test_ws/o")
+        result.type = "OPPOSITE";
+        else if(filename.substr(0,21) == "/home/lynnn/test_ws/f")
+        result.type = "FOLLOWING";
+        
         std::vector<Trajectory> data;
         std::ifstream file(filename);
         if (!file.is_open()) {
@@ -85,6 +98,7 @@ public:
 
         std::string line;
         bool header = true; // 跳过第一行标题
+        double last_theta = 0;
         while (std::getline(file, line)) {
             if (header) {
                 header = false;
@@ -97,42 +111,58 @@ public:
             // 读取时间戳
             std::getline(ss, cell, ',');
             traj.time = std::stod(cell);
-
-            if(filename == "/home/lynnn/test_ws/parking.csv")
-                traj.type = "PARKING";
-            else if(filename == "/home/lynnn/test_ws/opposite.csv")
-                traj.type = "OPPOSITE";
-            else if(filename == "/home/lynnn/test_ws/following.csv")
-                traj.type = "FOLLOWING";
-            
-            double last_theta = 0;
             // 读取 (x, y) 点对
             while (std::getline(ss, cell, ',')) {
                 double x = std::stod(cell);
                 if (!std::getline(ss, cell, ',')) break;
                 double y = std::stod(cell);
-                traj.points.emplace_back(x, y);
+                obs_state pt(x, y, 0.0, 0.0);
+                traj.points.emplace_back(pt);
             }
-             traj.cur_state.x =  traj.points[0].first;
-             traj.cur_state.y =  traj.points[0].second;
-            if(traj.points[1].first != traj.points[0].first || traj.points[1].second != traj.points[0].second) {
-                traj.cur_state.theta =  atan2(traj.points[1].second - traj.points[0].second,  traj.points[1].first - traj.points[0].first);
+
+            double last_theta_ = 0;
+            for(int i = 0; i < traj.points.size() - 1; ++i) {
+                if(traj.points[ i + 1].x != traj.points[i].x || traj.points[i + 1].y != traj.points[i].y) {
+                    traj.points[i].theta =  atan2(traj.points[i + 1].y - traj.points[i].y,  traj.points[i + 1].x - traj.points[i].x);
+                    last_theta_ = traj.points[i].theta;
+                }
+                else {
+                    if(i == 0)
+                        traj.points[i].theta =  last_theta;
+                    else 
+                        traj.points[i].theta =  last_theta_;
+                }   
+            traj.points[i].v =  hypot(traj.points[i + 1].x - traj.points[i].x, traj.points[ i +1].y - traj.points[i].y) / 0.1;
+            }
+            traj.points.back().theta = traj.points[traj.points.size() - 2].theta;
+            traj.points.back().v = traj.points[traj.points.size() - 2].v;
+
+             traj.cur_state.x =  traj.points[0].x;
+             traj.cur_state.y =  traj.points[0].y;
+            if(traj.points[1].x != traj.points[0].x || traj.points[1].y != traj.points[0].y) {
+                traj.cur_state.theta =  atan2(traj.points[1].y - traj.points[0].y,  traj.points[1].x - traj.points[0].x);
                 last_theta = traj.cur_state.theta;
             }
             else
                 traj.cur_state.theta =  last_theta;
-            if (traj.time >= 3.0 && filename == "/home/lynnn/test_ws/parking.csv")
-                traj.cur_state.theta =   traj.cur_state.theta - M_PI;
 
-            traj.cur_state.v =  hypot(traj.points[1].first - traj.points[0].first, traj.points[1].second - traj.points[0].second) / 0.1;
+            if (traj.time >= 3.0 && filename.substr(0,21) == "/home/lynnn/test_ws/p")
+                traj.cur_state.theta =   traj.cur_state.theta - M_PI;
+            // else if (traj.time >= 3.0  && filename == "/home/lynnn/test_ws/parking1.csv")
+            //     traj.cur_state.theta =   traj.cur_state.theta - M_PI;
+
+            traj.cur_state.v =  hypot(traj.points[1].x - traj.points[0].x, traj.points[1].y - traj.points[0].y) / 0.1;
             data.push_back(traj);
         }
-        if (filename == "/home/lynnn/test_ws/parking.csv") {
+        // if (filename == "/home/lynnn/test_ws/parking.csv" || filename == "/home/lynnn/test_ws/parking1.csv") {
+        if(filename.substr(0,21) == "/home/lynnn/test_ws/p") {
             cout << "parking set" << endl;
             data.back().cur_state.theta =  data[data.size() - 2].cur_state.theta;
         }
+
         file.close();
-        return data;
+        result.trajs = data;
+        return result;
     }
 
 };

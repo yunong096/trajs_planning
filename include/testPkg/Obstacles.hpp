@@ -25,8 +25,10 @@ public:
 		obstacle obs7(Vector2d{0, 0}, vector<double>{138.5, 83.8, 83.8, 138.5}, vector<double>{13.4, 13.4, 24.5, 24.5});
 		obstacle obs8(Vector2d{0, 0}, vector<double>{138.5, 83.8, 83.8, 138.5}, vector<double>{31.7, 31.7, 43.1, 43.1});
 		obstacle obs9(Vector2d{0, 0}, vector<double>{138.5, 83.8, 83.8, 138.5}, vector<double>{50.2, 50.2, 61.3, 61.3});
-		obstacle obs10(Vector2d{-1, 0}, vector<double>{50, 54.7, 54.7, 50}, vector<double>{66.95, 66.95, 64.95, 64.95});
-		obstacle obs11(Vector2d{1, 0}, vector<double>{54, 58.7, 58.7, 54}, vector<double>{64.95, 64.95, 62.95, 62.95});
+		// obstacle obs10(Vector2d{-1, 0}, vector<double>{50, 54.7, 54.7, 50}, vector<double>{66.95, 66.95, 64.95, 64.95});
+		// obstacle obs11(Vector2d{1, 0}, vector<double>{54, 58.7, 58.7, 54}, vector<double>{64.95, 64.95, 62.95, 62.95});
+		obstacle obs10(Vector2d{0, -1}, vector<double>{1.17, 3.17, 3.17, 1.17}, vector<double>{66.95-25, 66.95-25, 66.95 + 4.7-25, 66.95+ 4.7-25});
+		obstacle obs11(Vector2d{0, 1}, vector<double>{3.17, 5.17, 5.17, 3.17}, vector<double>{64.95-20, 64.95-20, 64.95+ 4.7-20, 64.95+ 4.7-20});
 		obs = { obs1, obs2, obs3, obs4, obs5, obs6, obs7, obs8, obs9, obs10, obs11 };
 		moving_ind = vector<int>{9, 10};
 	};

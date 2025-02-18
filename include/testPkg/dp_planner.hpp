@@ -154,7 +154,7 @@ private:
                 min_ind = i;
             }
         }
-        cout << "min_ind: " << min_ind << ", min_dist: " << min_dist << endl;
+        // cout << "min_ind: " << min_ind << ", min_dist: " << min_dist  << ", car_state:" << car_state.x << ", " << car_state.y << endl;
 
         if(min_ind > 0 && min_ind < pos_matrix.cols() - 1) {
             // ROS_WARN("enter inner");
@@ -165,7 +165,7 @@ private:
             }
             else {
                 // cout << "min_dis0: " <<min_res(0) << endl;
-                ROS_WARN("last part");
+                // ROS_WARN("last part");
                 min_res = traj_.findMinPtInSegment(min_ind, cur_pos, 0.0);
                 ref_state = traj_.getState(min_res(1), min_ind);
             }
@@ -230,12 +230,12 @@ private:
             }
         }
         else {
-            double s = 0.0, raletive_s = 0.0;
+            double s = 0.0, relative_s = 0.0;
             int piece_ind = -1;
             for(int i = 0; i < traj_.Pieces_S.size(); ++i) {
                 if(s +traj_.Pieces_S[i] >= fre_state.s) {
                     piece_ind = i;
-                    raletive_s = fre_state.s - s;
+                    relative_s = fre_state.s - s;
                     break;
                 }
                 s += traj_.Pieces_S[i];
@@ -243,10 +243,11 @@ private:
             if(piece_ind == -1) {
                 // ROS_ERROR("Find S failed, need_S: %f, all_S: %f", fre_state.s, traj_.Pieces_allS.back());
                 // return;
-                ROS_WARN("Find S failed, need_S: %f, all_S: %f", fre_state.s, traj_.Pieces_allS.back());
+                // ROS_WARN("Find S failed, need_S: %f, all_S: %f", fre_state.s, traj_.Pieces_allS.back());
                 piece_ind = traj_.Pieces_S.size() - 1;
+                relative_s = traj_.Pieces_S.back();
             }
-            double t = traj_.findTInSegment(piece_ind, raletive_s);
+            double t = traj_.findTInSegment(piece_ind, relative_s);
             ref_state = traj_.getState(t, piece_ind);
         }
         best_path_ref_.emplace_back(ref_state);
@@ -312,8 +313,9 @@ private:
             if(piece_ind == -1) {
                 // ROS_ERROR("Find S failed");
                 // return;
-                ROS_WARN("Find S failed, need_S: %f, all_S: %f", s, traj_.Pieces_allS.back());
+                // ROS_WARN("Find S failed, need_S: %f, all_S: %f", s, traj_.Pieces_allS.back());
                 piece_ind = traj_.Pieces_S.size() - 1;
+                relative_s = traj_.Pieces_S.back();
             }
             double t = traj_.findTInSegment(piece_ind, relative_s);
             ref_state = traj_.getState(t, piece_ind);
@@ -335,20 +337,27 @@ private:
     int isCollision(const CartesianState& xy_state, const vector<Vector3d>& obs) {
         // cout << "xy_state: " << xy_state.x << " " << xy_state.y << endl;
         //他车看作椭圆进行碰撞检测
-        double len = 4.7, width = 2.0, radius = sqrt(2);
         //测试，未进行坐标系变换，没有考虑他车的角度
         double front_x = xy_state.x + 2.7 * cos(xy_state.theta);
         double front_y = xy_state.y + 2.7 * sin(xy_state.theta);
+        double len = 4.7, width = 2.0, radius = sqrt(2);
+
         for (auto& ob : obs) {
             double a = len * sqrt(2) / 2 + radius, b = width * sqrt(2) / 2 + radius;
-            double res = pow(xy_state.x - ob(0), 2.0) / pow(a, 2.0) + pow(xy_state.y - ob(1), 2.0) / pow(b, 2.0);
+            double newx = cos(ob(2)) * (xy_state.x - ob(0)) + sin(ob(2)) * (xy_state.y - ob(1));
+            double newy = -sin(ob(2)) * (xy_state.x - ob(0)) + cos(ob(2)) * (xy_state.y - ob(1));
+            double front_newx = cos(ob(2)) * (front_x - ob(0)) + sin(ob(2)) * (front_y - ob(1));
+            double front_newy = -sin(ob(2)) * (front_x - ob(0)) + cos(ob(2)) * (front_y - ob(1));
+
+            double res = pow(newx, 2.0) / pow(a, 2.0) + pow(newy - ob(1), 2.0) / pow(b, 2.0);
             if (res < 1) {
                 // ROS_WARN("Collision detected");
                 // cout << "xy_state: " << xy_state.x << " " << xy_state.y << " " <<  "ob: " << ob(0) << " " << ob(1) << endl;
                 return 1;
             }
-            double res_front = pow(front_x - ob(0), 2.0) / pow(a, 2.0) + pow(front_y - ob(1), 2.0) / pow(b, 2.0);
+            double res_front = pow(front_newx, 2.0) / pow(a, 2.0) + pow(front_newy, 2.0) / pow(b, 2.0);
             if(res_front < 1) {
+                // ROS_WARN("Collision detected");
                 return 1;
             }
         }
