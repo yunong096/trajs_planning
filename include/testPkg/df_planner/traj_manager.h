@@ -382,15 +382,24 @@ class TrajPlanner {
     bool CheckCollisionUsingGlobalPosition(const Eigen::Vector2d p1) {
         double x = p1(0);
         double y = p1(1);
-        if(x >= 7.7 && x <= 83.8 && y >= 61.3 && y <= 68.3)
+        // if(x >= 7.7 && x <= 83.8 && y >= 61.3 && y <= 68.3)
+        //     return false;
+        // else if (x >= 76.7 && x <= 83.8 && y >= 50.2 && y <= 61.3)
+        //     return false;
+        // else if (x >= 76.7 && x <= 138.5 && y >= 43.1 && y <= 50.2)
+        //     return false;
+        // else if (x >= 99.3 && x <= 101.9 && y >= 50.2 && y <= 55.9)
+        //     return false;
+        // else if (x >= 0 && x <= 7.7 && y >= 61.3 && y <=80)
+        //     return false;
+
+        if(x >= 0 && x <= 7.7 && y >= 0 && y <= 80)
             return false;
-        else if (x >= 76.7 && x <= 83.8 && y >= 50.2 && y <= 61.3)
+        else if (x >= 7.7 && x <= 28.5 && y >= 61.3 && y <=80)
             return false;
-        else if (x >= 76.7 && x <= 138.5 && y >= 43.1 && y <= 50.2)
+        else if (x >= 7.7 && x <= 83.8 && y >= 6.3 && y <= 13.4)
             return false;
-        else if (x >= 99.3 && x <= 101.9 && y >= 50.2 && y <= 55.9)
-            return false;
-        else if (x >= 0 && x <= 7.7 && y >= 61.3 && y <=80)
+        else if (x >= 51.84 && x <= 54.44 && y >= 13.4 && y <= 19.1)
             return false;
         return true;
     }

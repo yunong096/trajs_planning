@@ -199,7 +199,7 @@ namespace plan_manage {
     
     // initInnerPts  = ctrl_points_;
     // ros::shutdown();
-    if(final_cost>=200000.0){
+    if(final_cost>=50000.0){
       ROS_ERROR("optimization fails! cost is too high!");
       flag_success = false;
     }
