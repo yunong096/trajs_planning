@@ -303,6 +303,8 @@ void DualVariableWarmStartOSQPInterface::assemble_P(
   std::vector<c_float> P_tmp;
   int edges_counter = 0;
 
+
+  //ptmp存储了每个障碍的ATA，由于这里障碍全是静态的，所以不需要遍历时间
   for (int j = 0; j < obstacles_num_; ++j) {
     int current_edges_num = obstacles_edges_num_(j, 0);
     Eigen::MatrixXd Aj;
@@ -329,6 +331,7 @@ void DualVariableWarmStartOSQPInterface::assemble_P(
   for (int i = 0; i < horizon_ + 1; ++i) {
     edges_counter = 0;
 
+    //遍历了时间，将ptmp压入pdata
     for (auto item : P_tmp) {
       P_data->emplace_back(item);
     }

@@ -300,6 +300,142 @@ bool TrajPlanner::RunGlobalOpt(const vector<Vector2d>& raw_pt) {
   return true; 
 }
 
+bool TrajPlanner::RunGlobalOpt2(const vector<Vector2d>& raw_pt) {
+  ploy_traj_opt_.reset(new PolyTrajOptimizer);
+  ploy_traj_opt_->setParam();
+
+  Eigen::VectorXd ego_piece_dur_vec;
+  Eigen::MatrixXd ego_innerPs;
+  double basetime = 0.0, worldtime =  0.0;
+  double dense_traj_res = 32, traj_res = 16;
+
+  /*try to merge optimization process*/
+  std::vector<std::vector<Eigen::MatrixXd>> sfc_container;
+  std::vector<int> singul_container;
+  Eigen::VectorXd duration_container;
+  std::vector<Eigen::MatrixXd> waypoints_container;
+  std::vector<Eigen::MatrixXd> iniState_container,finState_container;
+
+  int num = raw_pt.size();
+  vector<int> index_corner(0);
+  findCorners(raw_pt, index_corner);
+  duration_container.resize(index_corner.size() - 1);
+
+  for(int i = 0;i < index_corner.size() - 1; ++i) { //去掉终点
+    double timePerPiece = 1.0;
+    int ind = index_corner[i], next_ind = index_corner[i+1];
+    // double theta_ind = ind == 0 ? 0 : atan2(raw_pt[ind+1](1) - raw_pt[ind](1), raw_pt[ind+1](0) - raw_pt[ind](0));
+    // double theta_next_ind = (next_ind == num-1) ? -M_PI / 2 : atan2(raw_pt[next_ind+1](1) - raw_pt[next_ind](1), raw_pt[next_ind+1](0) - raw_pt[next_ind](0));
+    // CartesianState init_state(raw_pt[ind](0), raw_pt[ind](1), theta_ind, 0.001, 0.0, 0.0);
+    // CartesianState end_state(raw_pt[next_ind](0), raw_pt[next_ind](1), theta_next_ind, 0.001, 0.0, 0.0);
+    CartesianState init_state(raw_pt[ind](0), raw_pt[ind](1), 0.0, 0.0, 0.0, 0.0);
+    CartesianState end_state(raw_pt[next_ind](0), raw_pt[next_ind](1), 0.0, 0.0, 0.0, 0.0);
+
+    if(i == index_corner.size() - 2) {
+      double theta_next_ind = (next_ind == num-1) ? -M_PI / 2 : atan2(raw_pt[next_ind+1](1) - raw_pt[next_ind](1), raw_pt[next_ind+1](0) - raw_pt[next_ind](0));
+      end_state = CartesianState(raw_pt[next_ind](0), raw_pt[next_ind](1), theta_next_ind, 0.001, 0.0, 0.0);
+    }
+
+    traj_utils::FlatTrajData trajs;
+    if (!CalExtremePoint(init_state, end_state, &trajs)) {
+        ROS_WARN("DF planner illeal Input");
+        return false;
+    }
+    trajs.singul =  i % 2 == 0 ? 1 : -1;
+    singul_container.push_back(trajs.singul);
+    int piece_nums;
+    double initTotalduration = 0.0;
+    // 三次样条拟合
+    std::vector<double> x(next_ind - ind +1);
+    std::vector<double> y(next_ind - ind +1);
+    std::vector<double> s(next_ind - ind +1);
+    x[0] = raw_pt[ind](0);
+    y[0] = raw_pt[ind](1);
+    s[0] = 0;
+    double dis = 0.0;
+    for(int j = ind; j < next_ind; ++j) {
+      x[j - ind + 1] =  raw_pt[j + 1](0);
+      y[j - ind + 1] =  raw_pt[j + 1](1);
+      dis += hypot(raw_pt[j + 1](0) - raw_pt[j](0), raw_pt[j + 1](1) - raw_pt[j](1));
+      s[j - ind + 1] =  dis;
+    }
+    CubicSpline1D sx, sy;
+    sx.Init(s, x);
+    sy.Init(s, y);
+
+    piece_nums = std::max(6, (int)(s.back() / 2));
+    double s_per_piece = s.back() / piece_nums;
+    timePerPiece = 1.0; 
+    ego_piece_dur_vec.resize(piece_nums);
+    ego_piece_dur_vec.setConstant(timePerPiece);
+    duration_container[i] = timePerPiece * piece_nums;
+    ego_innerPs.resize(2, piece_nums-1);
+    std::vector<Eigen::Vector3d> statelist;
+    for(int j = 0; j < piece_nums; j++ ){
+      int resolution;
+      if(j==0||j==piece_nums-1){
+        resolution = dense_traj_res;
+      }
+      else{
+        resolution = traj_res;
+      }
+      for(int k = 0; k <= resolution; k++){
+        Eigen::Vector3d pos;
+        double cur_s = j * s_per_piece + k * (s_per_piece / resolution);
+        // ROS_WARN("dis: %f, t: %f, cur_s:%f", dis, t, cur_s);
+        // Vector2d posx = interpolate(x, s, cur_s);
+        // Vector2d posy =  interpolate(y, s, cur_s);
+        // pos << posx(0), posy(0), atan2(posy(1) / posx(1), 1);
+        Vector2d posx = sx.CalPosition(cur_s);
+        Vector2d posy = sy.CalPosition(cur_s);
+        pos << posx(0), posy(0), atan2(posy(1) / posx(1), 1);
+        statelist.push_back(pos);
+        if(k==resolution && j!=piece_nums-1){
+          ego_innerPs.col(j) = pos.head(2); 
+        }
+      } 
+    }
+    // std::cout<<"s: "<<kino_traj.singul<<"\n";
+    // double tm1 = ros::Time::now().toSec();
+    getRectangleConst(statelist);
+    sfc_container.push_back(hPolys_);
+    display_hPolys_.insert(display_hPolys_.end(),hPolys_.begin(),hPolys_.end());
+    waypoints_container.push_back(ego_innerPs);
+    iniState_container.push_back(trajs.start_state);
+    finState_container.push_back(trajs.final_state);
+    // basetime += initTotalduration;
+  }
+
+  double t1= ros::Time::now().toSec();
+  std::cout<<"try to optimize!\n";
+  
+  int flag_success = ploy_traj_opt_->OptimizeTrajectory(iniState_container, finState_container, 
+                                                      waypoints_container,duration_container, 
+                                                      sfc_container,  singul_container,worldtime,0.0);
+  std::cout<<"optimize ended!\n";
+  double t2 = ros::Time::now().toSec();
+  std::cout<<"opt time: "<<(t2-t1)<<std::endl;
+
+  if (flag_success)
+  {
+      std::cout << "[PolyTrajManager] Planning success ! " << std::endl;
+      for(unsigned int i = 0; i < index_corner.size() - 1; i++){
+        std::cout<<"init duration: "<<duration_container[i]<<std::endl;
+        std::cout<<"pieceNum: " << waypoints_container[i].cols() + 1 <<std::endl;
+        std::cout<<"optimized total duration: "<<(*ploy_traj_opt_->getMinJerkOptPtr())[i].getTraj(1).getTotalDuration()<<std::endl;
+        std::cout<<"optimized jerk cost: "<<(*ploy_traj_opt_->getMinJerkOptPtr())[i].getTrajJerkCost(1)<<std::endl;
+        // worldtime = traj_container_.singul_traj.back().end_time;
+      }
+      // ploy_traj_opt_->GetResult(0.1, refline);
+  }
+  else{
+      ROS_WARN("[PolyTrajManager] Planning fails! ");
+      return false;
+  }
+  return true; 
+}
+
+
 bool TrajPlanner::CalKeyPoint(const vector<CartesianState>& source_path,
                               traj_utils::FlatTrajData* trajs, double duration) {
   //piece点

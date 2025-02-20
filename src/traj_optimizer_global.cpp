@@ -136,7 +136,7 @@ namespace plan_manage {
     lbfgs_params.g_epsilon = 1e-16; //1.0e-16;
     lbfgs_params.min_step = 1.0e-32;
     lbfgs_params.delta = delta;
-    lbfgs_params.max_iterations = 12000;
+    lbfgs_params.max_iterations = 120000;
     t_now_ = now;
 
     ROS_WARN("lbfgs setparam finished");
@@ -199,7 +199,7 @@ namespace plan_manage {
     
     // initInnerPts  = ctrl_points_;
     // ros::shutdown();
-    if(final_cost>=50000.0){
+    if(final_cost>=500000.0){
       ROS_ERROR("optimization fails! cost is too high!");
       flag_success = false;
     }
@@ -569,7 +569,9 @@ namespace plan_manage {
         latacc2 = z_h3 * z_h3 * vel2_reci;
         cur2 = z_h3 * z_h3 * (vel2_reci_e * vel2_reci_e * vel2_reci_e);
         cur = z_h3 * vel3_2_reci_e;
-        violaAcc = acc2 - max_acc * max_acc;
+        // violaAcc = acc2 - max_acc * max_acc;
+        violaAcc = acc2;
+        
         violaLatAcc = latacc2 - max_latacc_ * max_latacc_;
 
         phidot_denominator = n6 + L_ * L_ * z2 * z2;
@@ -650,10 +652,10 @@ namespace plan_manage {
 
           gradViolaVc = 2.0 * beta1 * dsigma.transpose(); // 6*2
           gradViolaVt = 2.0 * alpha * z_h1;               // 1*1
-          jerkOpt_container[trajid].get_gdC().block<6, 2>(i * 6, 0) += omg * step * wei_feas_ * violaVelPenaD * gradViolaVc;
-          jerkOpt_container[trajid].get_gdT() += omg * wei_feas_ * (violaVelPenaD * gradViolaVt * step + violaVelPena / K);
-          costs(2) += omg * step * wei_feas_ * violaVelPena;
-          velcost+=omg * step * wei_feas_ * violaVelPena;
+          jerkOpt_container[trajid].get_gdC().block<6, 2>(i * 6, 0) += omg * step * wei_speed_ * violaVelPenaD * gradViolaVc;
+          jerkOpt_container[trajid].get_gdT() += omg * wei_speed_ * (violaVelPenaD * gradViolaVt * step + violaVelPena / K);
+          costs(2) += omg * step * wei_speed_ * violaVelPena;
+          velcost+=omg * step * wei_speed_ * violaVelPena;
 
         }
         
@@ -686,28 +688,65 @@ namespace plan_manage {
         /*violaCurL = cur-max_cur_;
         violaCurR = -cur-max_cur_;*/
 
-        if(violaCurL > 0.0){
-          positiveSmoothedL1(violaCurL, violaCurPenaL, violaCurPenaDL);
-          //@hzc
-          gradViolaKLc = beta1 * (vel3_2_reci_e * ddsigma.transpose()*B_h - 3 * vel3_2_reci_e * vel2_reci_e * z_h3 * dsigma.transpose()) 
-                         + beta2 * vel3_2_reci_e * dsigma.transpose() * B_h.transpose(); // 6*2
-          gradViolaKLt  = alpha*vel3_2_reci_e*(dddsigma.transpose()*B_h*dsigma-3*vel2_reci_e*z_h3*z_h1);
-          jerkOpt_container[trajid].get_gdC().block<6, 2>(i * 6, 0) += omg * step * wei_feas_ * 10.0 * violaCurPenaDL * gradViolaKLc;
-          jerkOpt_container[trajid].get_gdT() += omg * wei_feas_ * 10.0 * (violaCurPenaDL * gradViolaKLt * step + violaCurPenaL / K);
-          costs(2) += omg * step * wei_feas_ * 10.0 * violaCurPenaL;
-          curcost+=omg * step * wei_feas_ * 10.0 * violaCurPenaL;
-        }
-        if(violaCurR > 0.0){
-          positiveSmoothedL1(violaCurR, violaCurPenaR, violaCurPenaDR);
-          //@hzc
-          gradViolaKRc = -(beta1 * (vel3_2_reci_e * ddsigma.transpose()*B_h - 3 * vel3_2_reci_e * vel2_reci_e * z_h3 * dsigma.transpose()) 
-                         + beta2 * vel3_2_reci_e * dsigma.transpose() * B_h.transpose()); // 6*2
-          gradViolaKRt  = -(alpha*vel3_2_reci_e*(dddsigma.transpose()*B_h*dsigma-3*vel2_reci_e*z_h3*z_h1));
-          jerkOpt_container[trajid].get_gdC().block<6, 2>(i * 6, 0) += omg * step * wei_feas_ * 10.0 * violaCurPenaDR * gradViolaKRc;
-          jerkOpt_container[trajid].get_gdT()  += omg * wei_feas_ * 10.0 * (violaCurPenaDR * gradViolaKRt * step + violaCurPenaR / K);
-          costs(2) += omg * step * wei_feas_ * 10.0 * violaCurPenaR;
-          curcost+=omg * step * wei_feas_ * 10.0 * violaCurPenaR;
-        }
+        // if(violaCurL > 0.0){
+        //   positiveSmoothedL1(violaCurL, violaCurPenaL, violaCurPenaDL);
+        //   //@hzc
+        //   gradViolaKLc = beta1 * (vel3_2_reci_e * ddsigma.transpose()*B_h - 3 * vel3_2_reci_e * vel2_reci_e * z_h3 * dsigma.transpose()) 
+        //                  + beta2 * vel3_2_reci_e * dsigma.transpose() * B_h.transpose(); // 6*2
+        //   gradViolaKLt  = alpha*vel3_2_reci_e*(dddsigma.transpose()*B_h*dsigma-3*vel2_reci_e*z_h3*z_h1);
+        //   jerkOpt_container[trajid].get_gdC().block<6, 2>(i * 6, 0) += omg * step * wei_feas_ * 10.0 * violaCurPenaDL * gradViolaKLc;
+        //   jerkOpt_container[trajid].get_gdT() += omg * wei_feas_ * 10.0 * (violaCurPenaDL * gradViolaKLt * step + violaCurPenaL / K);
+        //   costs(2) += omg * step * wei_feas_ * 10.0 * violaCurPenaL;
+        //   curcost+=omg * step * wei_feas_ * 10.0 * violaCurPenaL;
+        // }
+        // if(violaCurR > 0.0){
+        //   positiveSmoothedL1(violaCurR, violaCurPenaR, violaCurPenaDR);
+        //   //@hzc
+        //   gradViolaKRc = -(beta1 * (vel3_2_reci_e * ddsigma.transpose()*B_h - 3 * vel3_2_reci_e * vel2_reci_e * z_h3 * dsigma.transpose()) 
+        //                  + beta2 * vel3_2_reci_e * dsigma.transpose() * B_h.transpose()); // 6*2
+        //   gradViolaKRt  = -(alpha*vel3_2_reci_e*(dddsigma.transpose()*B_h*dsigma-3*vel2_reci_e*z_h3*z_h1));
+        //   jerkOpt_container[trajid].get_gdC().block<6, 2>(i * 6, 0) += omg * step * wei_feas_ * 10.0 * violaCurPenaDR * gradViolaKRc;
+        //   jerkOpt_container[trajid].get_gdT()  += omg * wei_feas_ * 10.0 * (violaCurPenaDR * gradViolaKRt * step + violaCurPenaR / K);
+        //   costs(2) += omg * step * wei_feas_ * 10.0 * violaCurPenaR;
+        //   curcost+=omg * step * wei_feas_ * 10.0 * violaCurPenaR;
+        // }
+
+        const double curv_dir = cur > 0.0 ? 1.0 : -1.0;
+        double violaCurvPena = 0.0;
+      double violaCurvPenaD = 0.0;
+      positiveSmoothedL1(std::fabs(cur), violaCurvPena, violaCurvPenaD);
+      gradViolaKc =
+          curv_dir *
+          (beta1 *
+               (vel3_2_reci_e * ddsigma.transpose() * B_h -
+                3 * vel3_2_reci_e * vel2_reci_e * z_h3 * dsigma.transpose()) +
+           beta2 * vel3_2_reci_e * dsigma.transpose() * B_h.transpose());
+      const double gradViolaKt =
+          curv_dir * alpha * vel3_2_reci_e *
+          (dddsigma.transpose() * B_h * dsigma - 3 * vel2_reci_e * z_h3 * z_h1);
+          jerkOpt_container[trajid].get_gdC().block<6, 2>(i * 6, 0) +=
+          step * wei_cur_ * 10.0 * violaCurvPenaD * gradViolaKc;
+          jerkOpt_container[trajid].get_gdT() +=
+          wei_cur_ * 10.0 *
+          (violaCurvPenaD * gradViolaKt * step + violaCurvPena / K);
+      costs(2) += omg * step * wei_cur_ * 10.0 * violaCurvPena;
+      curcost+=omg * step * wei_cur_ * 10.0 * violaCurvPena;
+
+
+      const double d_curv = std::fabs(cur) - max_forward_cur;
+      if (d_curv > 0.0) {
+        double violaDCurvPena = 0.0;
+        double violaDCurvPenaD = 0.0;
+        positiveSmoothedL1(d_curv, violaDCurvPena, violaDCurvPenaD);
+        jerkOpt_container[trajid].get_gdC().block<6, 2>(i * 6, 0) +=
+            step * wei_cur_ * 10.0 * violaDCurvPenaD * gradViolaKc * 20.0;
+            jerkOpt_container[trajid].get_gdT() +=
+            wei_cur_ * 10.0 *
+            (violaDCurvPenaD * gradViolaKt * step + violaDCurvPena / K) * 20.0;
+        costs(2) += omg * step * wei_cur_ * 10.0 * violaDCurvPena;
+        curcost+=omg * step * wei_cur_ * 10.0 * violaDCurvPena;
+      }
+
 
         // if(violaPhidotL > 0.0)
         // {
@@ -1663,11 +1702,13 @@ double PolyTrajOptimizer::debugGradCheck(const int i_dp, // index of constraint 
     wei_obs_ = 1000.0;
     wei_surround_ = 5000.0;
     wei_feas_ = 2500.0;
+    wei_cur_ = 2500;
+    wei_speed_ = 0.0;
     wei_sqrvar_ = 500.0;
-    wei_time_ = 500.0;
+    wei_time_ = 0.0; //500.0;
     surround_clearance_ = 0.4;
     half_margin = 0.15;
-    max_phidot_ = 1.0; //10000.0;
+    max_phidot_ = 10000; //1.0; //10000.0;
     max_forward_vel = 15 / 3.6;
     max_backward_vel = 2.0;
     max_forward_cur = 0.2138; //1.0;

@@ -29,6 +29,7 @@ class TrajPlanner {
     vector<CartesianState>& final_result);
 
   bool RunGlobalOpt(const vector<Vector2d>& raw_pt);
+  bool RunGlobalOpt2(const vector<Vector2d>& raw_pt);
 
   bool CalKeyPoint(const vector<CartesianState>& source_path,
                               traj_utils::FlatTrajData* trajs, double duration);
@@ -175,7 +176,7 @@ class TrajPlanner {
         hPolys_.clear();
         double resolution = 1.0; //x1 y0.2
         double step = resolution * 1.0;
-        double limitBound = 10.0;
+        double limitBound = 20.0;
         //generate a rectangle for this state px py yaw
         for(const auto state : statelist){
             //generate a hPoly
@@ -402,5 +403,30 @@ class TrajPlanner {
         else if (x >= 51.84 && x <= 54.44 && y >= 13.4 && y <= 19.1)
             return false;
         return true;
+    }
+
+    Vector2d interpolate(const std::vector<double>& x,
+        const std::vector<double>& s,
+        double s0) {
+        // 检查边界
+        int n = s.size();
+        if (s0 <= s.front()) {
+        return Vector2d{x.front(), (x[1] - x[0]) / (s[1] - s[0])};
+        }
+        if (s0 >= s.back()) {
+        return Vector2d{x.back(), (x[n-1] - x[n-2]) / (s[n-1] - s[n-2])};
+        }
+
+        // 查找区间
+        size_t i = 0;
+        while (i < s.size() - 1 && s[i + 1] < s0) {
+        i++;
+        }
+
+        // 线性插值
+        double ratio = (s0 - s[i]) / (s[i + 1] - s[i]);
+        double x_interp = x[i] + ratio * (x[i + 1] - x[i]);
+
+        return Vector2d{x_interp, (x[i+1] - x[i]) / (s[i+1] - s[i])};
     }
 };

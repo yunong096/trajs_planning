@@ -1125,7 +1125,7 @@ bool DistanceApproachIPOPTInterface::eval_jac_g_ser(int n, const double* x,
 
     for (int i = 0; i < horizon_ + 1; ++i) {
       int edges_counter = 0;
-      for (int j = 0; j < obstacles_num_; ++j) {
+      for (int j = 0; j < obstacles_num_; ++j) { //可以考虑在这里修改，加入动态的障碍
         int current_edges_num = obstacles_edges_num_(j, 0);
         Eigen::MatrixXd Aj =
             obstacles_A_.block(edges_counter, 0, current_edges_num, 2);
@@ -1692,7 +1692,7 @@ void DistanceApproachIPOPTInterface::eval_constraints(int n, const T* x, int m,
 
   for (int i = 0; i < horizon_ + 1; ++i) {
     int edges_counter = 0;
-    for (int j = 0; j < obstacles_num_; ++j) {
+    for (int j = 0; j < obstacles_num_; ++j) { //同上
       int current_edges_num = obstacles_edges_num_(j, 0);
       Eigen::MatrixXd Aj =
           obstacles_A_.block(edges_counter, 0, current_edges_num, 2);

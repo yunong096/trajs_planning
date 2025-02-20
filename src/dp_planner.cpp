@@ -22,6 +22,10 @@ void DpPlanner::Initialize() {
     s_res = s_hri / (s_num - 1);
     l_res = l_hri / (l_num - 1);
 
+    if(s_hri < 7) s_num = 11;
+    if(s_hri < 3) s_num = 7;
+    if(s_hri < 1) s_num = 5;
+
     s_range.emplace_back(0);
     // double ds_dense = std::max(0.1, std::min(init_sl_state_.ds *t_res, s_hri / (s_num - 1)));
     double ds_dense = std::min(s_hri / (s_num - 1), std::max(0.1, init_sl_state_.ds *t_res));
@@ -141,7 +145,11 @@ void DpPlanner::Initialize() {
         // }
 
     if (new_hri > 0)  {
+        cout << "new_hri" << endl;
         s_hri = new_hri;
+        if(s_hri < 7) s_num = 11;
+        if(s_hri < 3) s_num = 7;
+        if(s_hri < 1) s_num = 5;
         linspace(0, s_hri, s_num,  s_range);
     }
     ROS_WARN("s_range: %f, %f, %f, %f, %f", s_range[0], s_range[1], s_range[2],s_range[s_range.size()-2],s_range[s_range.size()-1]);
@@ -257,7 +265,7 @@ void DpPlanner::DynamicProgramming() {
                     // ROS_ERROR("Find S failed");
                     // ROS_ERROR("Find S failed, need_S: %f, all_S: %f", s + init_sl_state_.s, traj_.Pieces_allS.back());
                     // return;
-                    ROS_WARN(", need_S: %f, all_S: %f", s + init_sl_state_.s, traj_.Pieces_allS.back());
+                    ROS_WARN("Find S failed, need_S: %f, all_S: %f", s + init_sl_state_.s, traj_.Pieces_allS.back());
                     piece_ind = traj_.Pieces_S.size() - 1;
                     relative_s = traj_.Pieces_S.back();
                 }
