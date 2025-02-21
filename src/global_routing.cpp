@@ -126,7 +126,7 @@ void GlobalRouting::publish_car_start_pose(const geometry_msgs::Pose &start_pose
   // get vehicle start pose
   state.x = start_pose.position.x;
   state.y = start_pose.position.y;
-  state.z = 0; //-M_PI/2;//-0.837; //-2.291536; //-M_PI / 2.0;   0.850056
+  state.z = -M_PI/2; //-M_PI/2;//-0.837; //-2.291536; //-M_PI / 2.0;   0.850056
   // 发布车的起点位置
   vehicle_start_pose_pub_.publish(state);
 }
@@ -172,8 +172,8 @@ GlobalRouting::GlobalRouting()
     goal_distanse = 0.1;
     goal_pose_.position.x = 58.6425 ; 
     goal_pose_.position.y = 28.3;
-    start_pose_.position.x = 30.2; //14.37;//35;//14.58 ;   //14.38 70.9
-    start_pose_.position.y = 9.9; //70.9;//64.93;//69.0;
+    start_pose_.position.x = 14.37;//30.2; //14.37;//35;//14.58 ;   //14.38 70.9
+    start_pose_.position.y = 70.9;//9.9; //70.9;//64.93;//69.0;
     obs = Obstacles();
 
      // 回调

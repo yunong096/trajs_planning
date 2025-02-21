@@ -429,4 +429,60 @@ class TrajPlanner {
 
         return Vector2d{x_interp, (x[i+1] - x[i]) / (s[i+1] - s[i])};
     }
+
+    // 计算勒让德多项式 P_n(x)
+    double legendre(int n, double x) {
+        if (n == 0) return 1.0;
+        if (n == 1) return x;
+
+        double P0 = 1.0;
+        double P1 = x;
+        double Pn = 0.0;
+
+        for (int i = 2; i <= n; ++i) {
+            Pn = ((2 * i - 1) * x * P1 - (i - 1) * P0) / i;
+            P0 = P1;
+            P1 = Pn;
+        }
+
+        return Pn;
+    }
+
+    // 计算勒让德多项式的导数 dP_n(x)/dx
+    double legendreDerivative(int n, double x) {
+        if (n == 0) return 0.0;
+        if (n == 1) return 1.0;
+
+        return (n * (legendre(n - 1, x) - x * legendre(n, x))) / (1 - x * x);
+    }
+
+    // 使用牛顿迭代法计算勒让德多项式的根
+    double findLegendreRoot(int n, double initialGuess, double tolerance = 1e-10) {
+        double x = initialGuess;
+        double delta;
+
+        do {
+            double Pn = legendre(n, x);
+            double dPn = legendreDerivative(n, x);
+            delta = Pn / dPn;
+            x -= delta;
+        } while (std::abs(delta) > tolerance);
+
+        return x;
+    }
+
+    // 计算高斯节点和权重
+    void gaussNodesAndWeights(int n, std::vector<double>& nodes, std::vector<double>& weights) {
+        nodes.resize(n);
+        weights.resize(n);
+
+        for (int i = 0; i < n; ++i) {
+            // 初始猜测值：使用切比雪夫节点的近似值
+            double initialGuess = std::cos(M_PI * (i + 0.75) / (n + 0.5));
+            nodes[i] = findLegendreRoot(n, initialGuess);
+
+            // 计算权重
+            weights[i] = 2.0 / ((1 - nodes[i] * nodes[i]) * std::pow(legendreDerivative(n, nodes[i]), 2));
+        }
+    }
 };

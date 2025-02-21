@@ -153,6 +153,10 @@ bool TrajPlanner::RunGlobalOpt(const vector<Vector2d>& raw_pt) {
 
   for(int i = 0;i < index_corner.size() - 1; ++i) { //去掉终点
     double timePerPiece = 1.0;
+    traj_utils::FlatTrajData trajs;
+    trajs.singul =  i % 2 == 0 ? 1 : -1;
+    singul_container.push_back(trajs.singul);
+
     int ind = index_corner[i], next_ind = index_corner[i+1];
     // double theta_ind = ind == 0 ? 0 : atan2(raw_pt[ind+1](1) - raw_pt[ind](1), raw_pt[ind+1](0) - raw_pt[ind](0));
     // double theta_next_ind = (next_ind == num-1) ? -M_PI / 2 : atan2(raw_pt[next_ind+1](1) - raw_pt[next_ind](1), raw_pt[next_ind+1](0) - raw_pt[next_ind](0));
@@ -160,13 +164,39 @@ bool TrajPlanner::RunGlobalOpt(const vector<Vector2d>& raw_pt) {
     // CartesianState end_state(raw_pt[next_ind](0), raw_pt[next_ind](1), theta_next_ind, 0.0, 0.0, 0.0);
     CartesianState init_state(raw_pt[ind](0), raw_pt[ind](1), 0.0, 0.0, 0.0, 0.0);
     CartesianState end_state(raw_pt[next_ind](0), raw_pt[next_ind](1), 0.0, 0.0, 0.0, 0.0);
-    traj_utils::FlatTrajData trajs;
+    double theta_ind  = atan2(raw_pt[ind+1](1) - raw_pt[ind](1), raw_pt[ind+1](0) - raw_pt[ind](0));
+    double theta_next_ind =atan2(raw_pt[next_ind](1) - raw_pt[next_ind - 1](1), raw_pt[next_ind](0) - raw_pt[next_ind-1](0));
+    if(trajs.singul == 1)  { //前进 
+      init_state.speed = 0.05;
+      init_state.theta = theta_ind;
+      end_state.speed = 0.05;
+      end_state.theta = theta_next_ind;
+    }
+    else {
+      init_state.speed = -0.05;
+      init_state.theta = theta_ind <= 0 ? theta_ind + M_PI : theta_ind - M_PI;
+      end_state.speed = -0.05;
+      end_state.theta = theta_next_ind <= 0 ? theta_next_ind + M_PI : theta_next_ind - M_PI;
+      //原范围：(-pi, pi]
+    }
+
+    // if(i == index_corner.size() - 2) {
+    //   double theta_next_ind = (next_ind == num-1) ? -M_PI / 2 : atan2(raw_pt[next_ind+1](1) - raw_pt[next_ind](1), raw_pt[next_ind+1](0) - raw_pt[next_ind](0));
+    //   end_state = CartesianState(raw_pt[next_ind](0), raw_pt[next_ind](1), theta_next_ind, 0.001, 0.0, 0.0);
+    // }
+
     if (!CalExtremePoint(init_state, end_state, &trajs)) {
         ROS_WARN("DF planner illeal Input");
         return false;
     }
-    trajs.singul =  i % 2 == 0 ? 1 : -1;
-    singul_container.push_back(trajs.singul);
+
+    cout << "init state" << endl;
+    cout << trajs.start_state(0,0) << "," <<  trajs.start_state(0,1) << ", " << trajs.start_state(0, 2) << endl;
+    cout << trajs.start_state(1,0) << "," <<  trajs.start_state(1,1) << ", " << trajs.start_state(1, 2) << endl;
+    cout << "end state" << endl;
+    cout << trajs.final_state(0,0) << "," <<  trajs.final_state(0,1) << ", " << trajs.start_state(0, 2) << endl;
+    cout << trajs.final_state(1,0) << "," <<  trajs.final_state(1,1) << ", " << trajs.final_state(1, 2) << endl;
+    
     int piece_nums;
     double initTotalduration = 0.0;
     // 三次样条拟合
@@ -232,6 +262,8 @@ bool TrajPlanner::RunGlobalOpt(const vector<Vector2d>& raw_pt) {
       }
       for(int k = 0; k <= resolution; k++){
         double t = basetime+res_time + 1.0*k/resolution*ego_piece_dur_vec[j];
+        // cout << "cur_t: " << t << endl;
+
         Eigen::Vector3d pos;
         //根据时间计算pos：x\y\theta
         double cur_s;
@@ -249,10 +281,12 @@ bool TrajPlanner::RunGlobalOpt(const vector<Vector2d>& raw_pt) {
             cur_s = 0.5 * new_acc * acc_t * acc_t + acc_t * new_acc * (t - acc_t);
           }
         }
+        cout << "cur_s: " << cur_s << endl;
+
         // ROS_WARN("dis: %f, t: %f, cur_s:%f", dis, t, cur_s);
         Vector2d posx = sx.CalPosition(cur_s);
         Vector2d posy = sy.CalPosition(cur_s);
-        pos << posx(0), posy(0), atan2(posy(1) / posx(1), 1);
+        pos << posx(0), posy(0), atan2(posy(1) , posx(1));
         statelist.push_back(pos);
         if(k==resolution && j!=piece_nums-1){
           ego_innerPs.col(j) = pos.head(2); 
@@ -323,25 +357,41 @@ bool TrajPlanner::RunGlobalOpt2(const vector<Vector2d>& raw_pt) {
 
   for(int i = 0;i < index_corner.size() - 1; ++i) { //去掉终点
     double timePerPiece = 1.0;
+    traj_utils::FlatTrajData trajs;
+    trajs.singul =  i % 2 == 0 ? 1 : -1;
+
     int ind = index_corner[i], next_ind = index_corner[i+1];
-    // double theta_ind = ind == 0 ? 0 : atan2(raw_pt[ind+1](1) - raw_pt[ind](1), raw_pt[ind+1](0) - raw_pt[ind](0));
-    // double theta_next_ind = (next_ind == num-1) ? -M_PI / 2 : atan2(raw_pt[next_ind+1](1) - raw_pt[next_ind](1), raw_pt[next_ind+1](0) - raw_pt[next_ind](0));
-    // CartesianState init_state(raw_pt[ind](0), raw_pt[ind](1), theta_ind, 0.001, 0.0, 0.0);
-    // CartesianState end_state(raw_pt[next_ind](0), raw_pt[next_ind](1), theta_next_ind, 0.001, 0.0, 0.0);
+
     CartesianState init_state(raw_pt[ind](0), raw_pt[ind](1), 0.0, 0.0, 0.0, 0.0);
     CartesianState end_state(raw_pt[next_ind](0), raw_pt[next_ind](1), 0.0, 0.0, 0.0, 0.0);
-
-    if(i == index_corner.size() - 2) {
-      double theta_next_ind = (next_ind == num-1) ? -M_PI / 2 : atan2(raw_pt[next_ind+1](1) - raw_pt[next_ind](1), raw_pt[next_ind+1](0) - raw_pt[next_ind](0));
-      end_state = CartesianState(raw_pt[next_ind](0), raw_pt[next_ind](1), theta_next_ind, 0.001, 0.0, 0.0);
+    double theta_ind  = atan2(raw_pt[ind+1](1) - raw_pt[ind](1), raw_pt[ind+1](0) - raw_pt[ind](0));
+    double theta_next_ind =atan2(raw_pt[next_ind](1) - raw_pt[next_ind - 1](1), raw_pt[next_ind](0) - raw_pt[next_ind-1](0));
+    if(trajs.singul == 1)  { //前进 
+      init_state.speed = 0.05;
+      init_state.theta = theta_ind;
+      end_state.speed = 0.05;
+      end_state.theta = theta_next_ind;
+    }
+    else {
+      init_state.speed = -0.05;
+      init_state.theta = theta_ind <= 0 ? theta_ind + M_PI : theta_ind - M_PI;
+      end_state.speed = -0.05;
+      end_state.theta = theta_next_ind <= 0 ? theta_next_ind + M_PI : theta_next_ind - M_PI;
+      //原范围：(-pi, pi]
     }
 
-    traj_utils::FlatTrajData trajs;
     if (!CalExtremePoint(init_state, end_state, &trajs)) {
         ROS_WARN("DF planner illeal Input");
         return false;
     }
-    trajs.singul =  i % 2 == 0 ? 1 : -1;
+
+    cout << "init state" << endl;
+    cout << trajs.start_state(0,0) << "," <<  trajs.start_state(0,1) << ", " << trajs.start_state(0, 2) << endl;
+    cout << trajs.start_state(1,0) << "," <<  trajs.start_state(1,1) << ", " << trajs.start_state(1, 2) << endl;
+    cout << "end state" << endl;
+    cout << trajs.final_state(0,0) << "," <<  trajs.final_state(0,1) << ", " << trajs.start_state(0, 2) << endl;
+    cout << trajs.final_state(1,0) << "," <<  trajs.final_state(1,1) << ", " << trajs.final_state(1, 2) << endl;
+
     singul_container.push_back(trajs.singul);
     int piece_nums;
     double initTotalduration = 0.0;
@@ -363,14 +413,33 @@ bool TrajPlanner::RunGlobalOpt2(const vector<Vector2d>& raw_pt) {
     sx.Init(s, x);
     sy.Init(s, y);
 
-    piece_nums = std::max(6, (int)(s.back() / 2));
+    
+    piece_nums = std::max(8, (int)(s.back() / 3));
     double s_per_piece = s.back() / piece_nums;
-    timePerPiece = 1.0; 
+    //均匀分段若分的段的间距较大，也会导致边界处出现龙格现象，因此不进行均匀采样，在首位两端处以较低的分辨率采样
+    vector<double> pieces_s(piece_nums, s_per_piece);
+    if(s_per_piece > 0.3) {
+      std::vector<double> node, weights;
+      gaussNodesAndWeights(piece_nums - 1, node, weights); //中间有piece_num-1个点
+      reverse(node.begin(), node.end()); //反转
+      node.emplace_back(1);
+      for(int j = 0; j < piece_nums; ++j) {
+        if(j == 0) {
+          pieces_s[j] = s.back() * (node[j] - (-1)) / 2;
+        }
+        else {
+          pieces_s[j] = s.back() * (node[j] - node[j-1]) / 2;
+        }
+      }
+    }
+
+    timePerPiece = 1.0;  //s_per_piece
     ego_piece_dur_vec.resize(piece_nums);
     ego_piece_dur_vec.setConstant(timePerPiece);
     duration_container[i] = timePerPiece * piece_nums;
     ego_innerPs.resize(2, piece_nums-1);
     std::vector<Eigen::Vector3d> statelist;
+    double base_s = 0.0;
     for(int j = 0; j < piece_nums; j++ ){
       int resolution;
       if(j==0||j==piece_nums-1){
@@ -381,19 +450,21 @@ bool TrajPlanner::RunGlobalOpt2(const vector<Vector2d>& raw_pt) {
       }
       for(int k = 0; k <= resolution; k++){
         Eigen::Vector3d pos;
-        double cur_s = j * s_per_piece + k * (s_per_piece / resolution);
+        double cur_s = base_s + k * (pieces_s[j] / resolution);
+        // cout << "cur_s: " << cur_s << endl;
         // ROS_WARN("dis: %f, t: %f, cur_s:%f", dis, t, cur_s);
         // Vector2d posx = interpolate(x, s, cur_s);
         // Vector2d posy =  interpolate(y, s, cur_s);
         // pos << posx(0), posy(0), atan2(posy(1) / posx(1), 1);
         Vector2d posx = sx.CalPosition(cur_s);
         Vector2d posy = sy.CalPosition(cur_s);
-        pos << posx(0), posy(0), atan2(posy(1) / posx(1), 1);
+        pos << posx(0), posy(0), atan2(posy(1), posx(1));
         statelist.push_back(pos);
         if(k==resolution && j!=piece_nums-1){
           ego_innerPs.col(j) = pos.head(2); 
         }
       } 
+      base_s += pieces_s[j];
     }
     // std::cout<<"s: "<<kino_traj.singul<<"\n";
     // double tm1 = ros::Time::now().toSec();
