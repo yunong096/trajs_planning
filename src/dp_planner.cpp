@@ -7,7 +7,7 @@ void DpPlanner::Initialize() {
     a_max = 2; // m/s^2
     t_num = 7;
     t_hri = 6;
-    s_num = 21;
+    s_num = 19;
     if(!is_using_global_df_)
         s_hri = std::min(v_max * t_hri, refline_.all_s.back() - init_sl_state_.s);
     else
@@ -22,9 +22,10 @@ void DpPlanner::Initialize() {
     s_res = s_hri / (s_num - 1);
     l_res = l_hri / (l_num - 1);
 
-    if(s_hri < 7) s_num = 11;
-    if(s_hri < 3) s_num = 7;
-    if(s_hri < 1) s_num = 5;
+    if(s_hri < 3) s_num = 5;
+    else if(s_hri < 5) s_num = 7;
+    else if(s_hri < 7) s_num = 9;
+
 
     s_range.emplace_back(0);
     // double ds_dense = std::max(0.1, std::min(init_sl_state_.ds *t_res, s_hri / (s_num - 1)));

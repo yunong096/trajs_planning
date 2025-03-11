@@ -225,11 +225,12 @@ bool Mpc::solve(CartesianState& current_state,
         //set obstacle constraints
         int margin = sqrt(2) + 0.5;
         std::vector<float> ref_states_para_front = FrontPos(ref_states);
+        // auto start_time1 = std::chrono::high_resolution_clock::now();
         for (int i = 0; i < N_ + 1; ++i)
         {
             //道路边界约束
-            if(gear_ > 0)
-                opti.subject_to((X(0, i) - X_ref(0,i)) * (X(0, i) - X_ref(0,i)) + (X(1, i) - X_ref(1,i)) * (X(1, i) - X_ref(1,i)) <= 3.2);  
+            // if(gear_ > 0)
+            //     opti.subject_to((X(0, i) - X_ref(0,i)) * (X(0, i) - X_ref(0,i)) + (X(1, i) - X_ref(1,i)) * (X(1, i) - X_ref(1,i)) <= 3.2);  
 
             // for j = 0; j < obs_num; ++j
             // for(auto j : obs.getMoveInds()) { 
@@ -299,33 +300,25 @@ bool Mpc::solve(CartesianState& current_state,
             //         opti.subject_to(L_f(0) * X(0, i) + L_f(1) * X(1, i) + L_f(2) * X(0, i + 1) + L_f(3) * X(1, i + 1)  + S(1, i) <= S_f);
             //     }
             // }
-        
             for(auto& traj : MovingObs::obs_traj) {
                 //获取障碍物位置
                 int relative_index = (int)(10 * dt_ * i);//简化，实际应该调用插值函数
                 MatrixXd poly(2, 4);
-                if(5 * frame_count < traj.trajs.size()) {
-                    auto& cur_obs = traj.trajs[5 * frame_count];
-                    poly(0,0) = cur_obs.points[relative_index].x + 3.7 * cos(cur_obs.points[relative_index].theta) - 1 * sin(cur_obs.points[relative_index].theta);
-                    poly(1,0) = cur_obs.points[relative_index].y + 3.7 * sin(cur_obs.points[relative_index].theta) + 1 * cos(cur_obs.points[relative_index].theta);
-                    poly(0,1) =cur_obs.points[relative_index].x + 3.7 * cos(cur_obs.points[relative_index].theta) + 1 * sin(cur_obs.points[relative_index].theta);
-                    poly(1,1) = cur_obs.points[relative_index].y + 3.7 * sin(cur_obs.points[relative_index].theta) - 1 * cos(cur_obs.points[relative_index].theta);
-                    poly(0,2) = cur_obs.points[relative_index].x - 1 * cos(cur_obs.points[relative_index].theta) + 1 * sin(cur_obs.points[relative_index].theta);
-                    poly(1,2) = cur_obs.points[relative_index].y - 1 * sin(cur_obs.points[relative_index].theta) - 1 * cos(cur_obs.points[relative_index].theta);
-                    poly(0,3) = cur_obs.points[relative_index].x - 1 * cos(cur_obs.points[relative_index].theta) - 1 * sin(cur_obs.points[relative_index].theta);
-                    poly(1,3) = cur_obs.points[relative_index].y - 1 * sin(cur_obs.points[relative_index].theta) + 1 * cos(cur_obs.points[relative_index].theta);
-                }
-                else {
-                    auto& cur_obs =  traj.trajs.back();
-                    poly(0,0) = cur_obs.points[relative_index].x + 3.7 * cos(cur_obs.points[relative_index].theta) - 1 * sin(cur_obs.points[relative_index].theta);
-                    poly(1,0) = cur_obs.points[relative_index].y + 3.7 * sin(cur_obs.points[relative_index].theta) + 1 * cos(cur_obs.points[relative_index].theta);
-                    poly(0,1) =cur_obs.points[relative_index].x + 3.7 * cos(cur_obs.points[relative_index].theta) + 1 * sin(cur_obs.points[relative_index].theta);
-                    poly(1,1) = cur_obs.points[relative_index].y + 3.7 * sin(cur_obs.points[relative_index].theta) - 1 * cos(cur_obs.points[relative_index].theta);
-                    poly(0,2) = cur_obs.points[relative_index].x - 1 * cos(cur_obs.points[relative_index].theta) + 1 * sin(cur_obs.points[relative_index].theta);
-                    poly(1,2) = cur_obs.points[relative_index].y - 1 * sin(cur_obs.points[relative_index].theta) - 1 * cos(cur_obs.points[relative_index].theta);
-                    poly(0,3) = cur_obs.points[relative_index].x - 1 * cos(cur_obs.points[relative_index].theta) - 1 * sin(cur_obs.points[relative_index].theta);
-                    poly(1,3) = cur_obs.points[relative_index].y - 1 * sin(cur_obs.points[relative_index].theta) + 1 * cos(cur_obs.points[relative_index].theta);
-                }
+                auto& cur_obs = (5 * frame_count < traj.trajs.size()) ? traj.trajs[5 * frame_count] : traj.trajs.back();
+                double x = cur_obs.points[relative_index].x;
+                double y = cur_obs.points[relative_index].y;
+                double theta = cur_obs.points[relative_index].theta;
+                double cos_theta = cos(theta);
+                double sin_theta = sin(theta);
+
+                poly(0, 0) = x + 3.7 * cos_theta - 1 * sin_theta;
+                poly(1, 0) = y + 3.7 * sin_theta + 1 * cos_theta;
+                poly(0, 1) = x + 3.7 * cos_theta + 1 * sin_theta;
+                poly(1, 1) = y + 3.7 * sin_theta - 1 * cos_theta;
+                poly(0, 2) = x - 1 * cos_theta + 1 * sin_theta;
+                poly(1, 2) = y - 1 * sin_theta - 1 * cos_theta;
+                poly(0, 3) = x - 1 * cos_theta - 1 * sin_theta;
+                poly(1, 3) = y - 1 * sin_theta + 1 * cos_theta;
                 // cout << "new_obs:" <<  poly(0,0) << ", " << poly(0,1) << endl;
                 
                 double margin =sqrt(2); //安全距离
@@ -334,21 +327,24 @@ bool Mpc::solve(CartesianState& current_state,
                 double beta, d;
                 Vector2d ref_pos(ref_states[i].x, ref_states[i].y);
                 d2poly(ref_pos, poly,alpha, beta, d);  // 计算到多边形的距离
+                if(fabs(d) > 5) continue;
                 opti.subject_to(alpha(0) * X(0, i) + alpha(1) * X(1, i) + S(0, i) <= beta - margin);
                 // opti.subject_to(alpha(0) * X(0, i) + alpha(1) * X(1, i)  <= beta - margin);
                 // cout << "alpha1:" << alpha(0) << "," << alpha(1) << "beta:" << beta << "d:" << d << endl;
 
-                // //前轴约束
+                //前轴约束
+                auto start_time1 = std::chrono::high_resolution_clock::now();
                 ref_pos  = Vector2d(ref_states_para_front[2 * i], ref_states_para_front[2 * i + 1]);
                 // cout << "ref_pos:" << ref_pos(0) << "," << ref_pos(1) << endl;
                 d2poly(ref_pos, poly, alpha, beta, d); // 计算到多边形的距离
+                if(fabs(d) > 5) continue;
 
-                //非线性的前轴约束
+                // 非线性的前轴约束
                 // opti.subject_to(alpha(0) *( X(0, i) + 2.7 * cos(X(3, i))) + alpha(1) * (X(1, i) + 2.7 * sin(X(3, i)))+ S(1, i) <= beta - margin);
                 // opti.subject_to(alpha(0) *( X(0, i) + 2.7 * cos(X(3, i))) + alpha(1) * (X(1, i) + 2.7 * sin(X(3, i))) <= beta - margin);
                 // cout << "alpha2:" << alpha(0) << ", " << alpha(1) << ", beta:" << beta << ", d:" << d << endl;
                 
-                //线性前轴约束
+                // 线性前轴约束
                 if(i < N_) {
                     // MX NEW_X = {X(0, i), X(1, i), X(0, i + 1), X(1, i + 1)};
                     MatrixXd A(2, 4);
@@ -371,18 +367,29 @@ bool Mpc::solve(CartesianState& current_state,
 					// 更新约束
 					MatrixXd C = B - A;
 					VectorXd X0 = C *  ref_X;
-					VectorXd fX0 = X0 / X0.norm();
-					MatrixXd dfX0 = C / X0.norm() - X0 * X0.transpose() * C / pow(X0.norm(), 3);
+                    double norm_X0 = X0.norm();
+					VectorXd fX0 = X0 / norm_X0;
+					MatrixXd dfX0 = C / norm_X0 - X0 * X0.transpose() * C / pow(norm_X0, 3);
 					MatrixXd L_f = alpha.transpose() * (A + 2.7 * dfX0);
 					double S_f = beta - margin + alpha.transpose() * 2.7 * (dfX0 * ref_X - fX0);
                     // cout << "sf: " << S_f << endl;
                     // cout << "lf0: " << L_f(0) << ", lf1: " << L_f(1) << ", lf2: " << L_f(2) << ", lf3: " << L_f(3) << endl;
                     opti.subject_to(L_f(0) * X(0, i) + L_f(1) * X(1, i) + L_f(2) * X(0, i + 1) + L_f(3) * X(1, i + 1)  + S(1, i) <= S_f);
+                    auto end_time1 = std::chrono::high_resolution_clock::now();
+                    // 计算时间间隔 
+                    std::chrono::duration<double> elapsed_seconds1 = end_time1 - start_time1;
+                    // 输出时间间隔
+                    // ROS_WARN( "obs constrains set time: %f s" ,  elapsed_seconds1.count() );
                 }
             }
-        
         }
-        // cout << "set obstacle constrains success" << endl;
+        cout << "set obstacles constrains success" << endl;
+        // auto end_time1 = std::chrono::high_resolution_clock::now();
+        // // 计算时间间隔 
+        // std::chrono::duration<double> elapsed_seconds1 = end_time1 - start_time1;
+        // // 输出时间间隔
+        // ROS_WARN( "obs constrains set time: %f s" ,  elapsed_seconds1.count() );
+
 
         // 设置初始值
         opti.set_initial(X, initX);

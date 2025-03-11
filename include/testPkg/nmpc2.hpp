@@ -137,27 +137,37 @@ public:
     std::vector<Eigen::Matrix<float,3,1>> get_predict_trajectory();
 
     std::vector<CartesianState> getSoluPath() {
-        // cout << "start to get final path" << endl;
+        // auto start_time_opt = std::chrono::high_resolution_clock::now();
+        
         std::vector<CartesianState> best_path;
-        for(int i = 0; i < N_ + 1; ++i) {
-            // cout << "i: " << i << endl;
+
+        // 缓存 solution_->value(X) 和 solution_->value(U) 的结果
+        const auto& X_values = solution_->value(X);
+        const auto& U_values = solution_->value(U);
+
+        for (int i = 0; i < N_ + 1; ++i) {
             CartesianState state;
-            state.x = static_cast<double>(solution_->value(X)(0, i));
-            state.y = static_cast<double>(solution_->value(X)(1, i));
-            state.speed = static_cast<double>(solution_->value(X)(2, i));
-            state.theta = static_cast<double>(solution_->value(X)(3, i));
+            state.x = static_cast<double>(X_values(0, i));
+            state.y = static_cast<double>(X_values(1, i));
+            state.speed = static_cast<double>(X_values(2, i));
+            state.theta = static_cast<double>(X_values(3, i));
+
             if (i < N_) {
-                state.acc = static_cast<double>(solution_->value(U)(0, i));
-                // state.kappa = static_cast<double>(solution_->value(U)(1, i));
-                state.kappa = tan(static_cast<double>(solution_->value(U)(1, i))) / 2.7;
-            }
-            else {
+                state.acc = static_cast<double>(U_values(0, i));
+                state.kappa = tan(static_cast<double>(U_values(1, i))) / 2.7;
+            } else {
                 state.acc = 0;
                 state.kappa = 0;
             }
-            best_path.emplace_back(state);
-            // cout << "state: " << state.x << " " << state.y << " " << state.speed << " " << state.theta << " " << state.acc << " " << state.kappa << endl;
+
+            best_path.emplace_back(std::move(state));  // 使用移动语义
         }
+        //  // 获取结束时间点
+        // auto end_time1 = std::chrono::high_resolution_clock::now();
+        // // 计算时间间隔
+        // std::chrono::duration<double> elapsed_seconds4 = end_time1 - start_time_opt;
+        // // 输出时间间隔
+        // std::cout << "refpath赋值执行时间: " << elapsed_seconds4.count() << " 秒" << std::endl;
         return best_path;
     }
 

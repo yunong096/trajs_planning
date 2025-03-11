@@ -264,7 +264,7 @@ void Dynamic_routing::thread_routing(void)
     }
 
     if(is_set_refline) {
-      if(hypot(init_car_state.x - goal_pose_.x, init_car_state.y - goal_pose_.y) < 0.01) {
+      if(hypot(init_car_state.x - goal_pose_.x, init_car_state.y - goal_pose_.y) < 0.1) {
         //结束，不能放在if外，会导致一开始就到达了终点
         ROS_WARN("heading goal arrived!");
         // ros::Duration(0.5 - 0.001 - elapsed_seconds2.count()).sleep();
@@ -421,9 +421,16 @@ void Dynamic_routing::thread_routing(void)
           ROS_WARN("finish dp planner");
         }
 
+        auto start_time_opt = std::chrono::high_resolution_clock::now();
         Mpc npmc_opt(frame_count, Vector3d(goal_pose_.x, goal_pose_.y, goal_pose_.z));
         npmc_opt.solve(init_car_state, ref_path, best_path, obs);
         best_path = npmc_opt.getFinalPath();
+        // 获取结束时间点
+        auto end_time1 = std::chrono::high_resolution_clock::now();
+        // 计算时间间隔
+        std::chrono::duration<double> elapsed_seconds4 = end_time1 - start_time_opt;
+        // 输出时间间隔
+        std::cout << "优化程序执行时间: " << elapsed_seconds4.count() << " 秒" << std::endl;
 
         // altro::problems::VehicleProblem altro_problem(frame_count);
         // altro_problem.IterOpt(init_car_state, ref_path, best_path, obs);
@@ -444,10 +451,10 @@ void Dynamic_routing::thread_routing(void)
         // 获取结束时间点
         auto end_time = std::chrono::high_resolution_clock::now();
         // 计算时间间隔
-        std::chrono::duration<double> elapsed_seconds = end_time - start_time;
+        // std::chrono::duration<double> elapsed_seconds = end_time - start_time;
         std::chrono::duration<double> elapsed_seconds2 = end_time - start_time_ros;
         // 输出时间间隔
-        std::cout << "程序执行时间: " << elapsed_seconds2.count() << " 秒" << std::endl;
+        std::cout << "局部规划程序执行时间: " << elapsed_seconds2.count() << " 秒" << std::endl;
         ++frame_count;
         if(elapsed_seconds2.count() < 0.5 - 0.001) {
           cout << "process sleep" <<endl;
