@@ -126,7 +126,7 @@ Dynamic_routing::~Dynamic_routing(void)
 void Dynamic_routing::thread_routing(void)
 {
   ros::NodeHandle n;
-  ros::Rate loop_rate(2);
+  ros::Rate loop_rate(1/0.3);
   traj_utils::Trajectory traj;
   // 障碍物对象
   Obstacles obs = Obstacles();
@@ -397,12 +397,12 @@ void Dynamic_routing::thread_routing(void)
         //开始计时
         auto start_time = std::chrono::high_resolution_clock::now();
         if(best_path.size() > 0) {
-              init_car_state.x = best_path[5].x;
-              init_car_state.y = best_path[5].y;
-              init_car_state.speed = best_path[5].speed;
-              init_car_state.theta = best_path[5].theta;
-              init_car_state.kappa = best_path[5].kappa;
-              init_car_state.acc = best_path[5].acc;
+              init_car_state.x = best_path[3].x;
+              init_car_state.y = best_path[3].y;
+              init_car_state.speed = best_path[3].speed;
+              init_car_state.theta = best_path[3].theta;
+              init_car_state.kappa = best_path[3].kappa;
+              init_car_state.acc = best_path[3].acc;
         }
         
         const vector<CartesianState> last_path = best_path;
@@ -456,9 +456,9 @@ void Dynamic_routing::thread_routing(void)
         // 输出时间间隔
         std::cout << "局部规划程序执行时间: " << elapsed_seconds2.count() << " 秒" << std::endl;
         ++frame_count;
-        if(elapsed_seconds2.count() < 0.5 - 0.001) {
+        if(elapsed_seconds2.count() < 0.3 - 0.001) {
           cout << "process sleep" <<endl;
-          ros::Duration(0.5 - 0.001 - elapsed_seconds2.count()).sleep();
+          ros::Duration(0.3 - 0.001 - elapsed_seconds2.count()).sleep();
         }
 
         //测试用bestpath

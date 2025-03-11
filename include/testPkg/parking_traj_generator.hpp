@@ -159,8 +159,8 @@ class ParkingTrajGenerator {
                 for(auto& traj : MovingObs::obs_traj) {
                     CartesianState obs_cartesian;
                     int relative_index = (int)(i * dt_ * 10); //简化，实际应该调用插值函数
-                    if(5 * frame_count < traj.trajs.size()) {
-                        auto& cur_obs = traj.trajs[5 * frame_count];
+                    if(3 * frame_count < traj.trajs.size()) {
+                        auto& cur_obs = traj.trajs[3 * frame_count];
                         obs_cartesian = CartesianState(cur_obs.points[relative_index].x + 1.35 * cos(cur_obs.points[relative_index].theta), cur_obs.points[relative_index].y + 1.35* sin(cur_obs.points[relative_index].theta), cur_obs.points[relative_index].theta, cur_obs.points[relative_index].v, 0, 0);
                         // obs_cartesian = CartesianState(cur_obs.points[relative_index].x, cur_obs.points[relative_index].y, cur_obs.points[relative_index].theta, cur_obs.points[relative_index].v, 0, 0);
                         

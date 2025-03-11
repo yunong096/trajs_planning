@@ -244,7 +244,7 @@ bool Mpc::solve(CartesianState& current_state,
             //         poly(0, k) = cur_obs.vertex_x[k];
             //         poly(1, k) = cur_obs.vertex_y[k];
             //     }
-            //     poly += cur_obs.speed * MatrixXd::Ones(1, 4) * (0.5 *  frame_count + dt_ * i); 
+            //     poly += cur_obs.speed * MatrixXd::Ones(1, 4) * (0.3 *  frame_count + dt_ * i); 
             //     cout << "ori_obs:" <<  poly(0,0) << ", " << poly(0,1) << endl;
                 
                 
@@ -304,7 +304,7 @@ bool Mpc::solve(CartesianState& current_state,
                 //获取障碍物位置
                 int relative_index = (int)(10 * dt_ * i);//简化，实际应该调用插值函数
                 MatrixXd poly(2, 4);
-                auto& cur_obs = (5 * frame_count < traj.trajs.size()) ? traj.trajs[5 * frame_count] : traj.trajs.back();
+                auto& cur_obs = (3 * frame_count < traj.trajs.size()) ? traj.trajs[3 * frame_count] : traj.trajs.back();
                 double x = cur_obs.points[relative_index].x;
                 double y = cur_obs.points[relative_index].y;
                 double theta = cur_obs.points[relative_index].theta;

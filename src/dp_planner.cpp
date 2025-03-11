@@ -60,8 +60,8 @@ void DpPlanner::Initialize() {
             if(traj.type == "PARKING") {
                 CartesianState obs_cartesian;
                 CartesianState end_obs_cartesian;
-                if(5 * frame_count < traj.trajs.size()) {
-                    auto& cur_obs = traj.trajs[5 * frame_count];
+                if(3 * frame_count < traj.trajs.size()) {
+                    auto& cur_obs = traj.trajs[3 * frame_count];
                     obs_cartesian = CartesianState(cur_obs.cur_state.x + 1.35 * cos(cur_obs.cur_state.theta), cur_obs.cur_state.y + 1.35* sin(cur_obs.cur_state.theta), cur_obs.cur_state.theta, cur_obs.cur_state.v, 0, 0);
                 }
                 else {
@@ -96,8 +96,8 @@ void DpPlanner::Initialize() {
         for(auto& traj : MovingObs::obs_traj) {
             if(traj.type == "FOLLOWING") {
                 CartesianState obs_cartesian;
-                if(5 * frame_count < traj.trajs.size()) {
-                    auto& cur_obs = traj.trajs[5 * frame_count];
+                if(3 * frame_count < traj.trajs.size()) {
+                    auto& cur_obs = traj.trajs[3 * frame_count];
                     obs_cartesian = CartesianState(cur_obs.points.back().x + 1.35 * cos(cur_obs.points.back().theta), cur_obs.points.back().y + 1.35* sin(cur_obs.points.back().theta), cur_obs.points.back().theta, cur_obs.points.back().v, 0, 0);
                 }
                 else {
@@ -129,7 +129,7 @@ void DpPlanner::Initialize() {
         //             poly(0, i) = cur_obs.vertex_x[i];
         //             poly(1, i) = cur_obs.vertex_y[i];
         //         }
-        //         poly += cur_obs.speed * MatrixXd::Ones(1, 4) * (0.5 *  frame_count + t); 
+        //         poly += cur_obs.speed * MatrixXd::Ones(1, 4) * (0.3 *  frame_count + t); 
                 
         //         CartesianState obs_cartesian((poly(0, 0) +  poly(0, 1)) / 2, (poly(1,1) + poly(1,2)) / 2, -M_PI / 2, 1, 0, 0);
         //         FrenetState obs_frenet;
@@ -182,7 +182,7 @@ void DpPlanner::DynamicProgramming() {
         //     poly(0, i) = cur_obs.vertex_x[i];
         //     poly(1, i) = cur_obs.vertex_y[i];
         //     }
-        //     poly += cur_obs.speed * MatrixXd::Ones(1, 4) * (0.5 *  frame_count + t); 
+        //     poly += cur_obs.speed * MatrixXd::Ones(1, 4) * (0.3 *  frame_count + t); 
         //     cout << "ori_obs: " << (poly(0, 0) +  poly(0, 1)) / 2 << ", " << (poly(1,1) + poly(1,2)) / 2 << endl;
             // if(cur_obs.speed(1) > 0){
             //     obs_vehicles.emplace_back(Vector3d{(poly(0, 0) +  poly(0, 1)) / 2, (poly(1,1) + poly(1,2)) / 2, M_PI / 2});
@@ -205,14 +205,14 @@ void DpPlanner::DynamicProgramming() {
             //         v_ref = 10 / 3.6;
             //     }
             // }
-            // ROS_WARN("obs_vehicles: %f, %f, %f,  time: %f", obs_vehicles[obs_vehicles.size() - 1](0), obs_vehicles[obs_vehicles.size() - 1](1), obs_vehicles[obs_vehicles.size() - 1](2), 0.5 *  frame_count + t);
+            // ROS_WARN("obs_vehicles: %f, %f, %f,  time: %f", obs_vehicles[obs_vehicles.size() - 1](0), obs_vehicles[obs_vehicles.size() - 1](1), obs_vehicles[obs_vehicles.size() - 1](2), 0.3 *  frame_count + t);
         // }
 
         for(auto& traj : MovingObs::obs_traj) {
             CartesianState obs_cartesian;
             int relative_index = (int)(t * 10); //简化，实际应该调用插值函数
-            if(5 * frame_count < traj.trajs.size()) {
-                auto& cur_obs = traj.trajs[5 * frame_count];
+            if(3 * frame_count < traj.trajs.size()) {
+                auto& cur_obs = traj.trajs[3 * frame_count];
                 obs_cartesian = CartesianState(cur_obs.points[relative_index].x + 1.35 * cos(cur_obs.points[relative_index].theta), cur_obs.points[relative_index].y + 1.35* sin(cur_obs.points[relative_index].theta), cur_obs.points[relative_index].theta, cur_obs.points[relative_index].v, 0, 0);
                 // obs_cartesian = CartesianState(cur_obs.points[relative_index].x, cur_obs.points[relative_index].y, cur_obs.points[relative_index].theta, cur_obs.points[relative_index].v, 0, 0);
                 
