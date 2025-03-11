@@ -43,6 +43,9 @@ find_package(fmt ${fmt_REQUIRED_VERSION} REQUIRED)
 set(AltroCpp_ROOT "/home/lynnn/dependpkgs/ALTRO-iLQR-main")
 find_package(AltroCpp 0.3.4 REQUIRED)
 
+file(GLOB_RECURSE PYTHON2.7_LIB "/usr/lib/python2.7/config-x86_64-linux-gnu/*.so")
+set(PYTHON2.7_INLCUDE_DIRS "/usr/include/python2.7")
+
 # find_package(Eigen REQUIRED)
 
 ## System dependencies are found with CMake's conventions
@@ -160,6 +163,7 @@ include_directories(
   /usr/local/include/osqp-eigen
   #/usr/local/include/absl
 #  /home/lynnn/dependpkgs/osqp-eigen-master/include
+  /usr/include/python2.7
 )
 
 ## Declare a C++ library

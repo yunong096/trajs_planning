@@ -1,7 +1,10 @@
 #include "dynamic_routing.hpp"
+#include "/home/lynnn/dependpkgs/Auto_driving_p/src/planning/dynamic_routing/include/common/matplotlibcpp.h"
 #include <iostream>
 #include <fstream>
 #include <sstream>
+namespace plt = matplotlibcpp;
+
 
 // using namespace plan_manage;
 // 全局变量
@@ -210,6 +213,26 @@ void Dynamic_routing::thread_routing(void)
           // smoothed_point2d.push_back(GlobalPathPoint(refline.theta[i], refline.kappa[i], refline.dkappa[i], refline.s[i], refline.x[i], refline.y[i]));
           smoothed_point2d.push_back(GlobalPathPoint(refline.theta[i], refline.kappa[i], 0, 0, refline.x[i], refline.y[i]));
         }
+        plt::plot(refline.x, refline.y, "o-");
+        // 设置标题
+        plt::title("Example Plot");
+
+        // 设置 x 轴和 y 轴的标题
+        plt::xlabel("X Axis");
+        plt::ylabel("Y Axis");
+
+        // 显示图例
+        // plt::legend();
+
+        // 显示图形
+        // plt::show();
+
+        // 设置 axis equal
+        plt::axis("equal");
+
+        //保存图形
+        plt::save("testplot_plot.png"); 
+
         std::ofstream file("/home/lynnn/test_ws/df_parking copy.txt");
         if (!file.is_open()) {
             std::cerr << "Failed to open file: /home/lynnn/test_ws/df_parking.txt" << std::endl;

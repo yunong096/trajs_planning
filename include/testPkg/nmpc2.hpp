@@ -18,10 +18,13 @@ private:
     double N_ = 60;
     double dt_ = 0.1;
     double v_max_ = 15/3.6;
-    double acc_max_ = 6;
+    double v_min_ = 0;
+    double acc_max_ = 2;
     double delta_max_ = 0.52;
     double acc_min_ ;
     double delta_min_ ;
+    int gear_ = 1;
+    
     Vector3d goal_pose_;
     DM Q_, R_, S_;
     MX X, U, S;
@@ -122,6 +125,7 @@ private:
 public:
     Mpc(int count);
     Mpc(int count, const Vector3d& goal_pose);
+    Mpc(int count, const Vector3d& goal_pose, int gear) ;
     ~Mpc() {};
     bool solve(CartesianState& current_state,
                                                         std::vector<GlobalPathPoint>& ori_states,

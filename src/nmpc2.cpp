@@ -28,11 +28,36 @@ Mpc::Mpc(int count, const Vector3d& goal_pose) {
     dt_ = 0.1;
     acc_max_ = 60;
     v_max_ = 15 / 3.6;
+    v_min_ = 0;
     delta_max_ = 0.52;
-    vector<double> weights = {2,2,2,0,4,4,12,12}; //Q,R,S
+    vector<double> weights = {2,2,2,0,4,4,100,100}; //Q,R,S
     acc_min_ = - acc_max_;
     delta_min_ = - delta_max_;
     goal_pose_ = goal_pose;
+    
+    Q_ = DM::zeros(4,4); //索引之前初始化size
+    R_ = DM::zeros(2,2);
+    S_ = DM::zeros(2,2);
+    
+
+    setWeights(weights);
+    kinematic_equation_ = setKinematicEquation();
+}
+
+Mpc::Mpc(int count, const Vector3d& goal_pose, int gear) {
+    
+    frame_count = count;
+    N_ = 60;
+    dt_ = 0.1;
+    acc_max_ = 60;
+    v_max_ = 0;
+    v_min_ = -2;
+    delta_max_ = 0.52;
+    vector<double> weights = {2,2,2,0,4,4,100,100}; //Q,R,S
+    acc_min_ = - acc_max_;
+    delta_min_ = - delta_max_;
+    goal_pose_ = goal_pose;
+    gear_ = gear;
     
     Q_ = DM::zeros(4,4); //索引之前初始化size
     R_ = DM::zeros(2,2);
@@ -173,7 +198,7 @@ bool Mpc::solve(CartesianState& current_state,
         //speed angle_speed limit 控制输入的约束
         opti.subject_to(-5 <= x <= 140.0);
         opti.subject_to(-5 <= y <= 80.0);
-        opti.subject_to(0 <= v <= v_max_);
+        opti.subject_to(v_min_ <= v <= v_max_);
         opti.subject_to( -1 < s1 <= 0);
         opti.subject_to( -1 < s2 <= 0);
         opti.subject_to(acc_min_ <= acc <= acc_max_);
@@ -202,6 +227,10 @@ bool Mpc::solve(CartesianState& current_state,
         std::vector<float> ref_states_para_front = FrontPos(ref_states);
         for (int i = 0; i < N_ + 1; ++i)
         {
+            //道路边界约束
+            if(gear_ > 0)
+                opti.subject_to((X(0, i) - X_ref(0,i)) * (X(0, i) - X_ref(0,i)) + (X(1, i) - X_ref(1,i)) * (X(1, i) - X_ref(1,i)) <= 3.2);  
+
             // for j = 0; j < obs_num; ++j
             // for(auto j : obs.getMoveInds()) { 
             //     //获取障碍物位置

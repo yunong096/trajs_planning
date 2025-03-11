@@ -11,6 +11,7 @@
 #include <fstream>
 #include <boost/thread.hpp>
 #include <altro/augmented_lagrangian/al_solver.hpp>
+// #include "matplotlibcpp.h"
 // #include "object_msgs/DynamicObjectArray.h"
 // #include "object_msgs/Semantic.h"
 // #include "object_msgs/Shape.h"
@@ -18,6 +19,7 @@
 // #include "CoarsePathGenerator.hpp"
 // #include "Obstacles.hpp"
 using namespace std;
+namespace plt = matplotlibcpp;
 // #include "modules/planning/planning_base/reference_line/spiral_reference_line_smoother.h"
 // #include "CoarsePathGenerator.hpp"
 // #include "gtest/gtest.h"
@@ -248,7 +250,8 @@ int main(int argc, char * argv[])
   //   std::cout << "数据已成功写入 output.txt 文件。" << std::endl;
   
 /**/
-
+plt::plot({1,3,2,4});
+plt::show();
 
   //编写循环，循环中发布数据
     while (ros::ok())
