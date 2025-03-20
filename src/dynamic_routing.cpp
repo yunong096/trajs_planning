@@ -152,9 +152,9 @@ void Dynamic_routing::thread_routing(void)
       config_.resolution = 0.1;
 
       // 打开输入文件流
-      std::ifstream inFile("/home/lynnn/test_ws/globalpoints_data5.txt");
+      std::ifstream inFile("/home/lynnn/test_ws/globalpoints_data5.txt"); //5
       if(!IS_USING_DF_GLOBAL_PLANNER) 
-        inFile =  std::ifstream("/home/lynnn/test_ws/globalpoints_data.txt");
+        inFile =  std::ifstream("/home/lynnn/test_ws/globalpoints_data6.txt");
   
       // 检查文件是否成功打开
       if (!inFile) {
@@ -192,6 +192,20 @@ void Dynamic_routing::thread_routing(void)
         cout << "spiral_smoother solve finished" << endl;
         refline.generateAllS();
         std::vector<GlobalPathPoint> smoothed_point2d = spiral_smoother.Interpolate(refline.theta, refline.kappa, refline.dkappa, refline.s, refline.x, refline.y, config_.resolution); //插值函数，对refline采样，便于可视化
+
+        std::ofstream file("/home/lynnn/test_ws/lx_data copy.txt");
+        if (!file.is_open()) {
+            std::cerr << "Failed to open file: /home/lynnn/test_ws/lx_data copy.txt" << std::endl;
+            return;
+        }
+        // 设置输出格式，保留小数点后6位
+        file << std::fixed << std::setprecision(6);
+        file <<"x" << " " << "y" << " " << "theta"  << " " << "kappa" << " " << "dkappa" << "\n";
+        for(int i =0; i < smoothed_point2d.size(); ++i) {
+          file << smoothed_point2d[i].x << " " << smoothed_point2d[i].y  << " " << smoothed_point2d[i].theta  << " " << smoothed_point2d[i].kappa << " " << smoothed_point2d[i].dkappa << "\n";
+        }
+          file.close();
+
         if (res > 0) {
           is_set_refline = true;
           ROS_WARN("global success!");
@@ -211,7 +225,8 @@ void Dynamic_routing::thread_routing(void)
         std::vector<GlobalPathPoint> smoothed_point2d;
         for(int i = 0; i < refline.x.size(); ++i) {
           // smoothed_point2d.push_back(GlobalPathPoint(refline.theta[i], refline.kappa[i], refline.dkappa[i], refline.s[i], refline.x[i], refline.y[i]));
-          smoothed_point2d.push_back(GlobalPathPoint(refline.theta[i], refline.kappa[i], 0, 0, refline.x[i], refline.y[i]));
+          smoothed_point2d.push_back(GlobalPathPoint(refline.theta[i], refline.kappa[i], refline.dkappa[i], 0, refline.x[i], refline.y[i]));
+          cout <<"kappa: " << refline.kappa[i] <<  ", dkappa: " << refline.dkappa[i] << endl;
         }
         plt::plot(refline.x, refline.y, "o-");
         // 设置标题
@@ -240,8 +255,10 @@ void Dynamic_routing::thread_routing(void)
         }
         // 设置输出格式，保留小数点后6位
         file << std::fixed << std::setprecision(6);
-        for(int i = smoothed_point2d.size() - 60 - 78; i < smoothed_point2d.size() - 78; ++i) {
-          file << smoothed_point2d[i].x << " " << smoothed_point2d[i].y << "\n";
+        file <<"x" << " " << "y" << " " << "theta"  << " " << "kappa" << " " << "dkappa" << "\n";
+        // for(int i = smoothed_point2d.size() - 60 - 78; i < smoothed_point2d.size() - 78; ++i) {
+          for(int i = 0; i < smoothed_point2d.size(); ++i) {
+          file << smoothed_point2d[i].x << " " << smoothed_point2d[i].y  << " " << smoothed_point2d[i].theta  << " " << smoothed_point2d[i].kappa << " " << smoothed_point2d[i].dkappa << "\n";
         }
           file.close();
 
@@ -444,8 +461,8 @@ void Dynamic_routing::thread_routing(void)
         //   best_path = new_path;
         // }
 
-        // if(frame_count > 0)
-        //   is_reach_goal = true; //单帧测试用
+        if(frame_count > 0)
+          is_reach_goal = true; //单帧测试用
 
         ROS_WARN("finish dynamic planner");
         // 获取结束时间点

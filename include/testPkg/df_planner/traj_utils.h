@@ -247,7 +247,7 @@ class Piece {
       res.kappa = singul *
                          (dsigma(0) * ddsigma(1) - dsigma(1) * ddsigma(0)) /
                          (dsigma_norm * dsigma_norm * dsigma_norm);
-      res.dkappa = singul *(
+      res.dkappa = singul *sqrt(dsigma_norm) * (
                               (ddsigma(0) * ddsigma(1) + dsigma(0) * dddsigma(1) - ddsigma(1) *ddsigma(0) -  dsigma(1) * dddsigma(0)) / (dsigma_norm * dsigma_norm * dsigma_norm)
                               + 
                               (dsigma(0) * ddsigma(1) - dsigma(1) * ddsigma(0)) * (-3/2) * pow(dsigma_norm * dsigma_norm, -5 / 2) * 2 * (dsigma(1) * ddsigma(1) + dsigma(0) * ddsigma(0)) 
@@ -261,18 +261,26 @@ class Piece {
     refline.y.emplace_back(pos[1]);
     Eigen::Vector2d dsigma = getdSigma(relative_t);
     Eigen::Vector2d ddsigma = getddSigma(relative_t);
+    Eigen::Vector2d dddsigma = getdddSigma(relative_t);
+
     const double dsigma_norm = dsigma.norm();
     refline.theta.emplace_back(std::atan2(singul * dsigma(1), singul * dsigma(0)));
     // refline.speed.emplace_back(singul * dsigma.norm());
     if (dsigma_norm < plan_manage::kEpsilon) {
       // refline.acc.emplace_back (0.0);
       refline.kappa.emplace_back(0.0);
+      refline.dkappa.emplace_back(0.0);
     } else {
       // refline.acc.emplace_back (singul * (dsigma(0) * ddsigma(0) + dsigma(1) * ddsigma(1)) /
       //            dsigma_norm);
       refline.kappa.emplace_back(singul *
                          (dsigma(0) * ddsigma(1) - dsigma(1) * ddsigma(0)) /
                          (dsigma_norm * dsigma_norm * dsigma_norm));
+      refline.dkappa.emplace_back( singul *sqrt(dsigma_norm) * (
+                          (ddsigma(0) * ddsigma(1) + dsigma(0) * dddsigma(1) - ddsigma(1) *ddsigma(0) -  dsigma(1) * dddsigma(0)) / (dsigma_norm * dsigma_norm * dsigma_norm)
+                          + 
+                          (dsigma(0) * ddsigma(1) - dsigma(1) * ddsigma(0)) * (-3/2) * pow(dsigma_norm * dsigma_norm, -5 / 2) * 2 * (dsigma(1) * ddsigma(1) + dsigma(0) * ddsigma(0)) 
+                            ));
     }
   }
 

@@ -199,10 +199,10 @@ namespace plan_manage {
     
     // initInnerPts  = ctrl_points_;
     // ros::shutdown();
-    if(final_cost>=500000.0){
-      ROS_ERROR("optimization fails! cost is too high!");
-      flag_success = false;
-    }
+    // if(final_cost>=500000.0){
+    //   ROS_ERROR("optimization fails! cost is too high!");
+    //   flag_success = false;
+    // }
     return flag_success;
   }
 
@@ -436,7 +436,7 @@ namespace plan_manage {
     Eigen::Matrix<double, 6, 1> beta0, beta1, beta2, beta3, beta4;
     double s1, s2, s3, s4, s5;
     double step, alpha;
-    Eigen::Matrix<double, 6, 2> gradViolaPc, gradViolaVc, gradViolaAc,gradViolaLatAc, gradViolaKc,gradViolaKLc,gradViolaKRc,gradViolaPhidotLc,gradViolaPhidotRc;
+    Eigen::Matrix<double, 6, 2> gradViolaPc, gradViolaVc, gradViolaAc,gradViolaLatAc, gradViolaKc, gradViolaDKc,gradViolaKLc,gradViolaKRc,gradViolaPhidotLc,gradViolaPhidotRc;
     double gradViolaPt, gradViolaVt, gradViolaAt,gradViolaLatAt, gradViolaKt,gradViolaKLt,gradViolaKRt,gradViolaPhidotLt,gradViolaPhidotRt;
     double violaPos, violaVel, violaAcc, violaLatAcc, violaCur, violaCurL, violaCurR, violaDynamicObs, violaPhidotL, violaPhidotR;
     double violaPosPenaD, violaVelPenaD, violaAccPenaD, violaLatAccPenaD, violaCurPenaD, violaCurPenaDL, violaCurPenaDR,violaDynamicObsPenaD, violaPhidotPenaDL, violaPhidotPenaDR;
@@ -534,6 +534,11 @@ namespace plan_manage {
         z_h2 = dddsigma.transpose() * dsigma;
         z_h3 = ddsigma.transpose() * B_h * dsigma;
 
+        // beta3* (B_h * dsigma * vel4_2_reci_e));//  +
+        // beta2 * (3 * vel6_2_reci_e * (B_h * dsigma * z_h1 + z2 * dsigma)) + 
+        // beta1 * ((B_h.transpose() * dddsigma * vel4_2_reci_e + vel6_2_reci_e * ( -4 * z1 *dsigma + 3*B_h.transpose()*ddsigma*z_h1 + 3 * z2 * ddsigma) - 18 * vel8_2_reci_e * z2 * z_h1 * dsigma) ));
+
+        
         n1 = z_h0;
         n2 = n1 * n1;
         n3 = n2 * n1;
@@ -561,6 +566,11 @@ namespace plan_manage {
         vel2_reci = 1.0 / (z_h0 * z_h0);
         vel2_reci_e = 1.0 / (z_h0 * z_h0+epis);
         vel3_2_reci_e = vel2_reci_e * sqrt(vel2_reci_e);
+        double vel4_2_reci_e = vel2_reci_e * vel2_reci_e;
+        double vel6_2_reci_e = vel2_reci_e *  vel2_reci_e * vel2_reci_e;
+        double vel8_2_reci_e = vel2_reci_e *  vel2_reci_e * vel2_reci_e *  vel2_reci_e;
+
+
         z_h0 = 1.0 / z_h0;
 
         z_h4 = z_h1 * vel2_reci;
@@ -569,6 +579,7 @@ namespace plan_manage {
         latacc2 = z_h3 * z_h3 * vel2_reci;
         cur2 = z_h3 * z_h3 * (vel2_reci_e * vel2_reci_e * vel2_reci_e);
         cur = z_h3 * vel3_2_reci_e;
+        double d_kappa = z1*vel4_2_reci_e + 3 * z2 * z_h1 * vel6_2_reci_e;
         // violaAcc = acc2 - max_acc * max_acc;
         violaAcc = acc2;
         
@@ -711,7 +722,7 @@ namespace plan_manage {
         //   curcost+=omg * step * wei_feas_ * 10.0 * violaCurPenaR;
         // }
 
-        const double curv_dir = cur > 0.0 ? 1.0 : -1.0;
+        const double curv_dir = cur > 0.0 ? 1.0 : -1.0;  //希望曲率尽可能小
         double violaCurvPena = 0.0;
       double violaCurvPenaD = 0.0;
       positiveSmoothedL1(std::fabs(cur), violaCurvPena, violaCurvPenaD);
@@ -733,7 +744,7 @@ namespace plan_manage {
       curcost+=omg * step * wei_cur_ * 10.0 * violaCurvPena;
 
 
-      const double d_curv = std::fabs(cur) - max_forward_cur;
+      const double d_curv = std::fabs(cur) - max_forward_cur; //惩罚大于最大曲率的点
       if (d_curv > 0.0) {
         double violaDCurvPena = 0.0;
         double violaDCurvPenaD = 0.0;
@@ -746,6 +757,29 @@ namespace plan_manage {
         costs(2) += omg * step * wei_cur_ * 10.0 * violaDCurvPena;
         curcost+=omg * step * wei_cur_ * 10.0 * violaDCurvPena;
       }
+
+
+      //考虑约束加入曲率变化率
+      // const double d_dcurv = std::fabs(d_kappa) - max_forward_cur; //惩罚大于最大曲率的点
+      const double dcurv_dir = d_kappa > 0.0 ? 1.0 : -1.0;  //希望曲率变化尽可能小
+        double violaDKappaPena = 0.0;
+        double violaDKappaPenaD = 0.0;
+        positiveSmoothedL1(fabs(d_kappa), violaDKappaPena, violaDKappaPenaD);
+        gradViolaDKc =dcurv_dir *(
+            beta3 * (vel4_2_reci_e * dsigma.transpose() * B_h.transpose()) +
+            beta2 * (3 * vel6_2_reci_e * (dsigma.transpose() * B_h.transpose() * z_h1 + z2 * dsigma.transpose())) +
+            beta1 * ((dddsigma.transpose() * B_h * vel4_2_reci_e + vel6_2_reci_e * ( -4 * z1 *dsigma.transpose() + 3*ddsigma.transpose() * B_h *z_h1 + 3 * z2 * ddsigma.transpose()) - 18 * vel8_2_reci_e * z2 * z_h1 * dsigma.transpose()) ) );
+      const double gradViolaDKt = dcurv_dir * alpha *(
+        vel4_2_reci_e * ddddsigma.transpose()* B_h * dsigma + 0.0 +
+          dddsigma.transpose() * 3 * vel6_2_reci_e * (B_h * dsigma * z_h1 + z2 * dsigma) + 0.0 +
+          ddsigma.transpose() * ((B_h.transpose() * dddsigma * vel4_2_reci_e + vel6_2_reci_e * ( -4 * z1 *dsigma + 3*B_h.transpose()*ddsigma*z_h1 + 3 * z2 * ddsigma) - 18 * vel8_2_reci_e * z2 * z_h1 * dsigma) ));
+        jerkOpt_container[trajid].get_gdC().block<6, 2>(i * 6, 0) +=
+            step * wei_d_cur_ * 10.0 * violaDKappaPenaD * gradViolaDKc * 20.0;
+            jerkOpt_container[trajid].get_gdT() +=
+            wei_d_cur_ * 10.0 *
+            (violaDKappaPenaD * gradViolaDKt * step + violaDKappaPena / K) * 20.0;
+        costs(2) += omg * step * wei_d_cur_ * 10.0 * violaDKappaPena;
+        curcost+=omg * step * wei_d_cur_ * 10.0 * violaDKappaPena;
 
 
         // if(violaPhidotL > 0.0)
@@ -1703,6 +1737,7 @@ double PolyTrajOptimizer::debugGradCheck(const int i_dp, // index of constraint 
     wei_surround_ = 5000.0;
     wei_feas_ = 2500.0;
     wei_cur_ = 3000;
+    wei_d_cur_ = 2000;
     wei_speed_ = 0.0;
     wei_sqrvar_ = 500.0;
     wei_time_ = 0.0; //500.0;

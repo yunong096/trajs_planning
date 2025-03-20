@@ -69,6 +69,7 @@ namespace plan_manage {
     double wei_feas_;                        // feasibility weight
     double wei_speed_;
     double wei_cur_;
+    double wei_d_cur_;
     double wei_sqrvar_;                      // squared variance weight
     double wei_time_;                        // time weight
     double surround_clearance_; // safe distance
