@@ -456,9 +456,9 @@ void Dynamic_routing::thread_routing(void)
         // 输出时间间隔
         std::cout << "局部规划程序执行时间: " << elapsed_seconds2.count() << " 秒" << std::endl;
         ++frame_count;
-        if(elapsed_seconds2.count() < 0.2 - 0.001) {
+        if(elapsed_seconds2.count() < 0.3 - 0.001) {
           cout << "process sleep" <<endl;
-          ros::Duration(0.2 - 0.001 - elapsed_seconds2.count()).sleep();
+          ros::Duration(0.3 - 0.001 - elapsed_seconds2.count()).sleep();
         }
 
         //测试用bestpath
