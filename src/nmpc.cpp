@@ -272,7 +272,7 @@ void NMPC1::opti_solution(CartesianState& current_state,
                     poly(0, k) = cur_obs.vertex_x[k];
                     poly(1, k) = cur_obs.vertex_y[k];
                 }
-                poly += cur_obs.speed * MatrixXd::Ones(1, 4) * (0.5 *  frame_count + m_sample_time * i); 
+                poly += cur_obs.speed * MatrixXd::Ones(1, 4) * (0.3 *  frame_count + m_sample_time * i); 
                 
                 double margin =sqrt(2); //安全距离
                 //后轴约束

@@ -30,6 +30,7 @@ private:
     MX X, U, S;
     std::unique_ptr<casadi::OptiSol> solution_;
     vector<CartesianState> opt_path;
+    std::vector<CartesianState> ref_states;
     Function kinematic_equation_;
     Function setKinematicEquation();
     int obs_num = 0, frame_count = 0; 
@@ -131,6 +132,10 @@ public:
                                                         std::vector<GlobalPathPoint>& ori_states,
                                                         std::vector<CartesianState>& ref_states,
                                                         Obstacles& obs);
+    bool solve2(CartesianState& current_state,
+                            std::vector<GlobalPathPoint>& ori_states,
+                            std::vector<CartesianState>& ref_states,
+                            Obstacles& obs);
 
     void setWeights(vector<double> weights);
     
