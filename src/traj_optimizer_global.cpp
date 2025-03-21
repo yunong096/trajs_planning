@@ -735,16 +735,23 @@ namespace plan_manage {
       const double gradViolaKt =
           curv_dir * alpha * vel3_2_reci_e *
           (dddsigma.transpose() * B_h * dsigma - 3 * vel2_reci_e * z_h3 * z_h1);
-          jerkOpt_container[trajid].get_gdC().block<6, 2>(i * 6, 0) +=
-          step * wei_cur_ * 10.0 * violaCurvPenaD * gradViolaKc;
-          jerkOpt_container[trajid].get_gdT() +=
-          wei_cur_ * 10.0 *
-          (violaCurvPenaD * gradViolaKt * step + violaCurvPena / K);
-      costs(2) += omg * step * wei_cur_ * 10.0 * violaCurvPena;
-      curcost+=omg * step * wei_cur_ * 10.0 * violaCurvPena;
+      //     jerkOpt_container[trajid].get_gdC().block<6, 2>(i * 6, 0) +=
+      //     step * wei_cur_ * 10.0 * violaCurvPenaD * gradViolaKc;
+      //     jerkOpt_container[trajid].get_gdT() +=
+      //     wei_cur_ * 10.0 *
+      //     (violaCurvPenaD * gradViolaKt * step + violaCurvPena / K);
+      // costs(2) += omg * step * wei_cur_ * 10.0 * violaCurvPena;
+      // curcost+=omg * step * wei_cur_ * 10.0 * violaCurvPena;
+      jerkOpt_container[trajid].get_gdC().block<6, 2>(i * 6, 0) +=
+      step * 0 * 10.0 * violaCurvPenaD * gradViolaKc;
+      jerkOpt_container[trajid].get_gdT() +=
+      0 * 10.0 *
+      (violaCurvPenaD * gradViolaKt * step + violaCurvPena / K);
+  costs(2) += omg * step * 0 * 10.0 * violaCurvPena;
+  curcost+=omg * step * 0 * 10.0 * violaCurvPena;
 
 
-      const double d_curv = std::fabs(cur) - max_forward_cur; //惩罚大于最大曲率的点
+      const double d_curv = std::fabs(cur) - max_cur; //惩罚大于最大曲率的点
       if (d_curv > 0.0) {
         double violaDCurvPena = 0.0;
         double violaDCurvPenaD = 0.0;
@@ -1733,16 +1740,16 @@ double PolyTrajOptimizer::debugGradCheck(const int i_dp, // index of constraint 
   void PolyTrajOptimizer::setParam() {
     traj_resolution_ = 16;
     destraj_resolution_ = 32;
-    wei_obs_ = 1000.0;
+    wei_obs_ = 2000.0;
     wei_surround_ = 5000.0;
-    wei_feas_ = 2500.0;
-    wei_cur_ = 6000;
-    wei_d_cur_ = 2000;
+    wei_feas_ = 1000.0; //2500
+    wei_cur_ = 10000;
+    wei_d_cur_ = 1000;
     wei_speed_ = 0.0;
     wei_sqrvar_ = 500.0;
     wei_time_ = 0.0; //500.0;
     surround_clearance_ = 0.4;
-    half_margin = 0.15;
+    half_margin = 0.0; //0.15
     max_phidot_ = 10000; //1.0; //10000.0;
     max_forward_vel = 15 / 3.6;
     max_backward_vel = 2.0;

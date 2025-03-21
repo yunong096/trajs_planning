@@ -56,8 +56,8 @@ Mpc::Mpc(int count, const Vector3d& goal_pose, int gear) {
     v_min_ = -2;
     v_ref = -1.5;
     // delta_max_ = 0.52;
-    delta_max_ = 0.52;
-    vector<double> weights = {4,4,2,0,2,0.1,100,100}; //Q,R,S
+    delta_max_ = 0.61;
+    vector<double> weights = {4,4,2,0,2,0.5,10,10}; //Q,R,S
     acc_min_ = - acc_max_;
     delta_min_ = - delta_max_;
     goal_pose_ = goal_pose;
@@ -470,7 +470,7 @@ bool Mpc::solve(CartesianState& current_state,
 
 bool Mpc::solve(CartesianState& current_state,std::vector<CartesianState>& ref_states_,Obstacles& obs) {
         //设置ref_states_para
-int max_iter = 1;
+int max_iter = 2;
 ref_states = ref_states_;
 
 while(max_iter--) {
@@ -612,7 +612,7 @@ ROS_WARN("not enter final heading planning, ref(%f, %f, %f), local(%f, %f, %f, %
 
 
 //set obstacle constraints
-int margin = sqrt(2) + 0.5;
+// int margin = sqrt(2) + 0.5;
 std::vector<float> ref_states_para_front = FrontPos(ref_states);
 // auto start_time1 = std::chrono::high_resolution_clock::now();
 for (int i = 0; i < N_ + 1; ++i)
@@ -665,55 +665,55 @@ opti.subject_to(alpha(0) * X(0, i) + alpha(1) * X(1, i) + S(0, i) <= beta - marg
 // opti.subject_to(alpha(0) * X(0, i) + alpha(1) * X(1, i)  <= beta - margin);
 // cout << "alpha1:" << alpha(0) << "," << alpha(1) << "beta:" << beta << "d:" << d << endl;
 
-//前轴约束
-auto start_time1 = std::chrono::high_resolution_clock::now();
-ref_pos  = Vector2d(ref_states_para_front[2 * i], ref_states_para_front[2 * i + 1]);
-// cout << "ref_pos:" << ref_pos(0) << "," << ref_pos(1) << endl;
-d2poly(ref_pos, poly, alpha, beta, d); // 计算到多边形的距离
-if(fabs(d) > 5) continue;
+// //前轴约束
+// auto start_time1 = std::chrono::high_resolution_clock::now();
+// ref_pos  = Vector2d(ref_states_para_front[2 * i], ref_states_para_front[2 * i + 1]);
+// // cout << "ref_pos:" << ref_pos(0) << "," << ref_pos(1) << endl;
+// d2poly(ref_pos, poly, alpha, beta, d); // 计算到多边形的距离
+// if(fabs(d) > 5) continue;
 
-// 非线性的前轴约束
-// opti.subject_to(alpha(0) *( X(0, i) + 2.7 * cos(X(3, i))) + alpha(1) * (X(1, i) + 2.7 * sin(X(3, i)))+ S(1, i) <= beta - margin);
-// opti.subject_to(alpha(0) *( X(0, i) + 2.7 * cos(X(3, i))) + alpha(1) * (X(1, i) + 2.7 * sin(X(3, i))) <= beta - margin);
-// cout << "alpha2:" << alpha(0) << ", " << alpha(1) << ", beta:" << beta << ", d:" << d << endl;
+// // 非线性的前轴约束
+// // opti.subject_to(alpha(0) *( X(0, i) + 2.7 * cos(X(3, i))) + alpha(1) * (X(1, i) + 2.7 * sin(X(3, i)))+ S(1, i) <= beta - margin);
+// // opti.subject_to(alpha(0) *( X(0, i) + 2.7 * cos(X(3, i))) + alpha(1) * (X(1, i) + 2.7 * sin(X(3, i))) <= beta - margin);
+// // cout << "alpha2:" << alpha(0) << ", " << alpha(1) << ", beta:" << beta << ", d:" << d << endl;
 
-// 线性前轴约束
-if(i < N_) {
-// MX NEW_X = {X(0, i), X(1, i), X(0, i + 1), X(1, i + 1)};
-MatrixXd A(2, 4);
-A << 1, 0, 0, 0,
-0, 1, 0, 0; 
-MatrixXd B(2, 4);
-B << 0, 0, 1, 0,
-0, 0, 0, 1; 
-Vector4d ref_X (ref_states[i].x, ref_states[i].y, 
- ref_states[i+1].x, ref_states[i+1].y);
-if(ref_states[i].x == ref_states[i+1].x && ref_states[i].y == ref_states[i+1].y) {
-// ref_X(2) = ref_states[i].x + std::numeric_limits<double>::epsilon() * cos(ref_states[i].theta);
-// ref_X(3) = ref_states[i].y + std::numeric_limits<double>::epsilon() * sin(ref_states[i].theta);
-ref_X =  Vector4d(ref_states[i].x, ref_states[i].y, 
- ref_states[i].x + 0.1 * cos(ref_states[i].theta), 
- ref_states[i].y + 0.1 * sin(ref_states[i].theta));
-}
+// // 线性前轴约束
+// if(i < N_) {
+// // MX NEW_X = {X(0, i), X(1, i), X(0, i + 1), X(1, i + 1)};
+// MatrixXd A(2, 4);
+// A << 1, 0, 0, 0,
+// 0, 1, 0, 0; 
+// MatrixXd B(2, 4);
+// B << 0, 0, 1, 0,
+// 0, 0, 0, 1; 
+// Vector4d ref_X (ref_states[i].x, ref_states[i].y, 
+//  ref_states[i+1].x, ref_states[i+1].y);
+// if(ref_states[i].x == ref_states[i+1].x && ref_states[i].y == ref_states[i+1].y) {
+// // ref_X(2) = ref_states[i].x + std::numeric_limits<double>::epsilon() * cos(ref_states[i].theta);
+// // ref_X(3) = ref_states[i].y + std::numeric_limits<double>::epsilon() * sin(ref_states[i].theta);
+// ref_X =  Vector4d(ref_states[i].x, ref_states[i].y, 
+//  ref_states[i].x + 0.1 * cos(ref_states[i].theta), 
+//  ref_states[i].y + 0.1 * sin(ref_states[i].theta));
+// }
 
-// cout << "ref_states:" << ref_states[i].x << "," << ref_states[i].y  << ", " << ref_states[i+1].x << ", " << ref_states[i+1].y<< endl;
-// 更新约束
-MatrixXd C = B - A;
-VectorXd X0 = C *  ref_X;
-double norm_X0 = X0.norm();
-VectorXd fX0 = X0 / norm_X0;
-MatrixXd dfX0 = C / norm_X0 - X0 * X0.transpose() * C / pow(norm_X0, 3);
-MatrixXd L_f = alpha.transpose() * (A + 2.7 * dfX0);
-double S_f = beta - margin + alpha.transpose() * 2.7 * (dfX0 * ref_X - fX0);
-// cout << "sf: " << S_f << endl;
-// cout << "lf0: " << L_f(0) << ", lf1: " << L_f(1) << ", lf2: " << L_f(2) << ", lf3: " << L_f(3) << endl;
-opti.subject_to(L_f(0) * X(0, i) + L_f(1) * X(1, i) + L_f(2) * X(0, i + 1) + L_f(3) * X(1, i + 1)  + S(1, i) <= S_f);
-auto end_time1 = std::chrono::high_resolution_clock::now();
-// 计算时间间隔 
-std::chrono::duration<double> elapsed_seconds1 = end_time1 - start_time1;
-// 输出时间间隔
-// ROS_WARN( "obs constrains set time: %f s" ,  elapsed_seconds1.count() );
-}
+// // cout << "ref_states:" << ref_states[i].x << "," << ref_states[i].y  << ", " << ref_states[i+1].x << ", " << ref_states[i+1].y<< endl;
+// // 更新约束
+// MatrixXd C = B - A;
+// VectorXd X0 = C *  ref_X;
+// double norm_X0 = X0.norm();
+// VectorXd fX0 = X0 / norm_X0;
+// MatrixXd dfX0 = C / norm_X0 - X0 * X0.transpose() * C / pow(norm_X0, 3);
+// MatrixXd L_f = alpha.transpose() * (A + 2.7 * dfX0);
+// double S_f = beta - margin + alpha.transpose() * 2.7 * (dfX0 * ref_X - fX0);
+// // cout << "sf: " << S_f << endl;
+// // cout << "lf0: " << L_f(0) << ", lf1: " << L_f(1) << ", lf2: " << L_f(2) << ", lf3: " << L_f(3) << endl;
+// // opti.subject_to(L_f(0) * X(0, i) + L_f(1) * X(1, i) + L_f(2) * X(0, i + 1) + L_f(3) * X(1, i + 1)  + S(1, i) <= S_f);
+// auto end_time1 = std::chrono::high_resolution_clock::now();
+// // 计算时间间隔 
+// std::chrono::duration<double> elapsed_seconds1 = end_time1 - start_time1;
+// // 输出时间间隔
+// // ROS_WARN( "obs constrains set time: %f s" ,  elapsed_seconds1.count() );
+// }
 }
 }
 cout << "set obstacles constrains success" << endl;
