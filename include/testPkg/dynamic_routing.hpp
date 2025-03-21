@@ -20,7 +20,8 @@
 #include <waypoint_msgs/WaypointArray.h>
 // #include "Obstacles.hpp"
 // #include "CoarsePathGenerator.hpp"
-#include "dp_planner.hpp"
+// #include "dp_planner.hpp"
+#include "parking_traj_generator.hpp"
 // #include "nmpc2.hpp"
 // #include "df_planner/traj_manager.h"
 // #include "altro_optimizer.hpp"
@@ -77,6 +78,9 @@ private:
   GlobalPath refline = GlobalPath();
   vector<CartesianState> best_path;
   vector<GlobalPathPoint> ref_path;
+
+  //模式，用于计数走过几个尖点
+  int mode = 1;
 
 
   // visual sub

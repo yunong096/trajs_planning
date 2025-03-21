@@ -132,6 +132,7 @@ public:
                                                         std::vector<GlobalPathPoint>& ori_states,
                                                         std::vector<CartesianState>& ref_states,
                                                         Obstacles& obs);
+    bool solve(CartesianState& current_state,std::vector<CartesianState>& ref_states_,Obstacles& obs);
     bool solve2(CartesianState& current_state,
                             std::vector<GlobalPathPoint>& ori_states,
                             std::vector<CartesianState>& ref_states,
@@ -156,7 +157,8 @@ public:
             state.y = static_cast<double>(X_values(1, i));
             state.speed = static_cast<double>(X_values(2, i));
             state.theta = static_cast<double>(X_values(3, i));
-
+            if(state.theta > M_PI) state.theta -= 2 * M_PI;
+            if(state.theta < -M_PI) state.theta += 2 * M_PI;
             if (i < N_) {
                 state.acc = static_cast<double>(U_values(0, i));
                 state.kappa = tan(static_cast<double>(U_values(1, i))) / 2.7;
@@ -179,10 +181,12 @@ public:
     std::vector<CartesianState> getFinalPath() {
         for(int i = 0; i < 8; ++i) {
             auto state = opt_path[i];
-            cout << "state: " << state.x << " " << state.y << " " << state.speed << " " << state.theta << " " << state.acc << " " << state.kappa << endl;
+            cout << "state: " << state.x << " " << state.y << " "  << state.theta << " " << state.speed << " " <<state.acc << " " << state.kappa << endl;
         }
         return opt_path;
     }
+
+    double v_ref = 10 / 3.6;
 };
 
 

@@ -94,6 +94,7 @@ void DpPlanner::Initialize() {
 
         //再判断是否有同向的车辆
         for(auto& traj : MovingObs::obs_traj) {
+            if(traj.type == "PEDESTRAIN") continue;
             if(traj.type == "FOLLOWING") {
                 CartesianState obs_cartesian;
                 if(3 * frame_count < traj.trajs.size()) {
@@ -209,6 +210,7 @@ void DpPlanner::DynamicProgramming() {
         // }
 
         for(auto& traj : MovingObs::obs_traj) {
+            if(traj.type == "PEDESTRAIN") continue;
             CartesianState obs_cartesian;
             int relative_index = (int)(t * 10); //简化，实际应该调用插值函数
             if(3 * frame_count < traj.trajs.size()) {
@@ -222,7 +224,6 @@ void DpPlanner::DynamicProgramming() {
                 obs_cartesian = CartesianState(cur_obs.points[relative_index].x + 1.35 * cos(cur_obs.points[relative_index].theta), cur_obs.points[relative_index].y + 1.35* sin(cur_obs.points[relative_index].theta), cur_obs.points[relative_index].theta, cur_obs.points[relative_index].v, 0, 0);
             }
             // cout << "new_obs:" <<  obs_cartesian.x << ", " << obs_cartesian.y << ", " << obs_cartesian.theta<< endl;
-
             if(traj.type == "OPPOSITE") {
                 obs_vehicles.emplace_back(Vector3d{obs_cartesian.x, obs_cartesian.y, obs_cartesian.theta});
             }

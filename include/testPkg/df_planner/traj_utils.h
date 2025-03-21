@@ -448,7 +448,7 @@ class Trajectory {
       double minDistanceSquared = std::numeric_limits<double>::max();
       double x0 = pos(0), y0 = pos(1);
       GlobalPathPoint res();
-      int max_iter = 100;
+      int max_iter = 200;
       while (max_iter--) {
           double x = pieces[piece_idx].getPos(t)(0);
           double y = pieces[piece_idx].getPos(t)(1);

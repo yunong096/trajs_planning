@@ -1,10 +1,14 @@
 import csv
 
 # 初始位置和速度
-initial_x = 4.17
-initial_y = 64.95 + 2.35 - 20
-velocity_x = 0.0
-velocity_y = 1.0
+# initial_x = 4.17
+# initial_y = 64.95 + 2.35 - 20
+# velocity_x = 0.0
+# velocity_y = 1.0
+initial_x = 58
+initial_y = 15
+velocity_x = -0.50
+velocity_y = 0.0
 
 # 时间步长和预测长度
 time_step = 0.1
@@ -30,7 +34,7 @@ for t in range(0, 401):  # 30秒，每0.1秒一个时间步长，共301个时间
     data.append(row)
 
 # 写入CSV文件
-with open('opposite1.csv', 'w', newline='') as csvfile:
+with open('pedestrian.csv', 'w', newline='') as csvfile:
     writer = csv.writer(csvfile)
     writer.writerow(header)
     writer.writerows(data)

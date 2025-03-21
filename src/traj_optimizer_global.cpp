@@ -1736,7 +1736,7 @@ double PolyTrajOptimizer::debugGradCheck(const int i_dp, // index of constraint 
     wei_obs_ = 1000.0;
     wei_surround_ = 5000.0;
     wei_feas_ = 2500.0;
-    wei_cur_ = 3000;
+    wei_cur_ = 6000;
     wei_d_cur_ = 2000;
     wei_speed_ = 0.0;
     wei_sqrvar_ = 500.0;

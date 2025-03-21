@@ -1,28 +1,249 @@
 #include <vector>
 #include "dp_planner.hpp"
-#include "modules/planning/planning_base/math/piecewise_jerk/piecewise_jerk_problem.h"
+// #include "modules/planning/planning_base/math/piecewise_jerk/piecewise_jerk_speed_problem.h"
+#include <casadi/casadi.hpp>
+using namespace std;
 
 class ParkingTrajGenerator {
     public:
-        ParkingTrajGenerator(const CartesianState& init_state,  std::shared_ptr<plan_manage::PolyTrajOptimizer> df_refline, const traj_utils::Trajectory traj,int count, const vector<CartesianState>& last_path){
+        ParkingTrajGenerator(int mode, const CartesianState& init_state,  std::shared_ptr<plan_manage::PolyTrajOptimizer> df_refline, const traj_utils::Trajectory traj,int count, const vector<CartesianState>& last_path){
             frame_count = count;
-            refline_ = refline;
+            mode_ = mode;
             df_refline_ = df_refline;
             traj_ = traj;
-            // ROS_WARN("current_state: %f, %f, %f, %f, %f, %f", init_state.x, init_state.y, init_state.theta, init_state.speed, init_state.acc, init_state.kappa);
-            CarToFrenet(init_state, init_sl_state_);
-            // ROS_WARN("current_frenet_state:  s--%f,  l--%f,  ds--%f,  dds--%f", init_sl_state_.s, init_sl_state_.l, init_sl_state_.ds, init_sl_state_.dds);
-            Initialize();
+            CartesianState init_state_ = init_state;
+            ROS_WARN("current_state: %f, %f, %f, %f, %f, %f", init_state.x, init_state.y, init_state.theta, init_state.speed, init_state.acc, init_state.kappa);
+            if(mode % 2 == 1)  {//倒档
+                init_state_.speed = -init_state_.speed;
+                if(init_state_.speed < 0) init_state_.speed = 0;
+                init_state_.acc = -init_state_.acc;
+            }
+            CarToFrenet(init_state_, init_sl_state_);
+            ROS_WARN("current_frenet_state:  s--%f,  l--%f,  ds--%f,  dds--%f", init_sl_state_.s, init_sl_state_.l, init_sl_state_.ds, init_sl_state_.dds);
+            // Initialize();
         };
+        
+        ~ParkingTrajGenerator(){};
+
+        vector<CartesianState>  solvePieceJerkProblem() {
+            // cout << "0" << endl;
+            double path_length = traj_.Pieces_allS.back() - init_sl_state_.s;
+            cout << "1" << endl;
+            double total_t =  1.5 * max((v_max_abs * v_max_abs + path_length * a_max) / (a_max * v_max_abs) , 2.0); //不考虑障碍的估计总时间
+            double start_t = -1, end_t = total_t;
+            int num_of_knots = (int)(10 * total_t + 1);
+            vector<pair<double, double>> s_bounds(num_of_knots);
+            // cout << "2" << endl;
+            for(int i = 0; i < num_of_knots; ++i) {
+                for(auto& traj : MovingObs::obs_traj) {
+                    if(traj.type != "PEDESTRAIN") continue;
+                    CartesianState obs_cartesian;
+                    int relative_index = (int)(i * dt_ * 10); //简化，实际应该调用插值函数
+                    if(3 * frame_count < traj.trajs.size()) {
+                        auto& cur_obs = traj.trajs[3 * frame_count];
+                        obs_cartesian = CartesianState(cur_obs.points[relative_index].x, cur_obs.points[relative_index].y, cur_obs.points[relative_index].theta, cur_obs.points[relative_index].v, 0, 0);
+                        // obs_cartesian = CartesianState(cur_obs.points[relative_index].x, cur_obs.points[relative_index].y, cur_obs.points[relative_index].theta, cur_obs.points[relative_index].v, 0, 0);                       
+                    }
+                    else {
+                        auto& cur_obs =  traj.trajs.back();
+                        obs_cartesian = CartesianState(cur_obs.points[relative_index].x , cur_obs.points[relative_index].y, cur_obs.points[relative_index].theta, cur_obs.points[relative_index].v, 0, 0);
+                    }
+                    FrenetState obs_sl_state;
+                    CarToFrenet(obs_cartesian, obs_sl_state);
+                    // ROS_WARN("obs_frenet_state:  s--%f,  l--%f,  ds--%f,  dds--%f", obs_sl_state.s, obs_sl_state.l, obs_sl_state.ds, obs_sl_state.dds);
+                    if(obs_sl_state.s - 1.8 <= traj_.Pieces_allS.back() && fabs(obs_sl_state.l) < 1.8) {// &&  obs_sl_state.s - init_sl_state_.s > 2.2) { //障碍物与轨迹交叉
+                        s_bounds[i] = std::pair<double, double>(0.0, max(0.0, obs_sl_state.s - init_sl_state_.s - 1.8)); //1 + 0.5 + 0.3
+                        // cout  << "检测到障碍轨迹与路径相交 : " <<  obs_sl_state.s - init_sl_state_.s - 1.8 << endl;
+                        if(start_t == 0) start_t = dt_ * i;
+                        end_t = dt_ * i;
+                    }
+                    else {
+                        s_bounds[i] = std::pair<double, double>(0.0, max(0.0, path_length));
+                    }
+                }
+            }
+            // cout << "完成初步s上下限设置和总时间设置" << endl;
+            if(start_t >= 0) {
+                cout << "更新总时间" << endl;
+                total_t += 1.5 * (max((end_t - start_t), 0.1));
+                int n_tmp = num_of_knots;
+                num_of_knots = (int)(10 * total_t + 1);
+                for(int i = n_tmp; i < num_of_knots; ++i) {
+                    s_bounds.emplace_back(std::pair<double, double>(0.0, max(0.0, path_length)));
+                }
+            }
+            cout << "完成s上下限设置和总时间设置, 最终点的个数为： " <<  num_of_knots << endl;
+        
+        int N_ = num_of_knots;
+        Opti opti = Opti();
+        Slice all;
+        MX cost = 0;
+        MX S,DS,DDS,DDDS;
+        S = opti.variable(1, N_);
+        DS = opti.variable(1, N_);
+        DDS = opti.variable(1, N_);
+        DDDS = opti.variable(1, N_);
+
+        DM DS_ref =DM::zeros(1, N_);   // 定义一个4行N_+1列的参数矩阵X_ref 注意：是已知的常量
+        DM DDS_ref =DM::zeros(1, N_);   // 定义一个4行N_+1列的参数矩阵X_ref 注意：是已知的常量
+        DM DDDS_ref =DM::zeros(1, N_);   // 定义一个4行N_+1列的参数矩阵X_ref 注意：是已知的常量
+        // DS_ref(0, 0) =  init_sl_state_.ds;
+        // DDS_ref(0, 0) =  init_sl_state_.dds;
+        for (int i = 1; i < N_ ; ++i) {
+            DS_ref(0, 0) =  2;
+        }
+        // cout << "set ref state success" << endl;
+        double w_s = 0.0, w_ds = 5.0, w_dds = 4.0, w_ddds = 4.0;
+        DM Q_ = DM::zeros(1,1); //索引之前初始化size
+        DM R_ = DM::zeros(1,1);
+        DM S_ = DM::zeros(1,1);
+        Q_(0,0) = w_ds;
+        R_(0,0) = w_dds;
+        S_(0,0) = w_ddds;
+        //set costfunction
+        for (int i = 0; i < N_; ++i) {
+            MX DS_0 = DS(all, i) - DS_ref(all, i); 
+            MX DDS_0 = DDS(all, i) - DDS_ref(all, i); 
+            MX DDDS_0 = DDDS(all, i) - DDDS_ref(all, i); 
+            cost += MX::mtimes({DS_0.T(), Q_, DS_0}); //目标函数是状态误差和控制输入的成本之和
+            cost += MX::mtimes({DDS_0.T(), R_, DDS_0});
+            cost += MX::mtimes({DDDS_0.T(), S_, DDDS_0});
+        }
+        opti.minimize(cost); //opti.minimize 用于定义优化问题的目标函数
+        // cout << "set cost success" << endl;
+
+        //kinematic constrains opti.subject_to 用于添加约束条件到优化问题中
+        for (int i = 0; i < N_ - 1; ++i) {
+            //连续性约束
+            opti.subject_to(DDDS(0,i)== (DDS(0,i+1) - DDS(0,i)) / dt_);  // 
+            opti.subject_to(DS(0,i + 1)== DS(0,i)  + dt_*DDS(0,i) + 1/2 *dt_ * dt_ * DDDS(0,i));  //
+            opti.subject_to(S(0,i + 1)== S(0,i) + dt_ *  DS(0,i)  + 1/2 * dt_ * dt_ * DDS(0,i) + 1/6 * dt_ * dt_* dt_ * DDDS(0,i));  // 
+        }
+        // cout << "set kinematic constrains success" << endl;
+
+        //init value 初始化，初始状态赋值第一列所有行
+        opti.subject_to(S(0, 0) == 0);//第一个时间步（索引为0）表示当前时刻的状态
+        opti.subject_to(DS(0, 0) == init_sl_state_.ds);//第一个时间步（索引为0）表示当前时刻的状态
+        opti.subject_to(DDS(0, 0) == init_sl_state_.dds);//第一个时间步（索引为0）表示当前时刻的状态
+        
+        opti.subject_to(S(0, N_-1) == path_length - 0.0001);//第一个时间步（索引为0）表示当前时刻的状态
+        opti.subject_to(DS(0, N_-1) == 0.0);//第一个时间步（索引为0）表示当前时刻的状态
+        // opti.subject_to(DDS(0, N_-1) == 0);//第一个时间步（索引为0）表示当前时刻的状态
+
+        for(int i = 0; i < N_; ++i) {
+            opti.subject_to(s_bounds[i].first <= S(0,i) <= s_bounds[i].second);
+            // opti.subject_to(0<= S(0,i) <= path_length);
+            opti.subject_to(0 <= DS(0,i) <= 2);
+            opti.subject_to(-1 <= DDS(0,i) <= 1);
+        }
+    
+        //set solver
+        casadi::Dict solver_opts; // 设置求解器选项
+        solver_opts["expand"] = true; //MX change to SX for speed up
+        solver_opts["ipopt.max_iter"] = 1000;
+        solver_opts["ipopt.print_level"] = 0;
+        solver_opts["print_time"] = 0;
+        solver_opts["ipopt.acceptable_tol"] = 1e-6;
+        solver_opts["ipopt.acceptable_obj_change_tol"] = 1e-6;
+
+        opti.solver("ipopt", solver_opts);
+
+        // auto start_time = std::chrono::high_resolution_clock::now();
+
+        // solution_ = std::make_unique<casadi::OptiSol>(opti.solve());
+
+        // auto end_time = std::chrono::high_resolution_clock::now();
+        // // 计算时间间隔 
+        // std::chrono::duration<double> elapsed_seconds = end_time - start_time;
+        // // 输出时间间隔
+        // ROS_WARN( "a NMPC problem solve time: %f s" ,  elapsed_seconds.count() );
+
+            // piecewise_jerk_problem.Optimize(4000);
+            // 缓存 solution_->value(X) 和 solution_->value(U) 的结果
+        std::unique_ptr<casadi::OptiSol>  solution_; // = std::make_unique<casadi::OptiSol>(opti.solve());
+        try {
+            solution_ = std::make_unique<casadi::OptiSol>(opti.solve());
+        } catch (const casadi::CasadiException& e) {
+            std::cerr << "Solver failed: " << e.what() << std::endl;
+        
+            // 调试变量值
+            auto S_val = opti.debug().value(S);
+            auto DS_val = opti.debug().value(DS);
+            auto DDS_val = opti.debug().value(DDS);
+            auto DDDS_val = opti.debug().value(DDDS);
+        
+            std::cerr << "S values: " << S_val << std::endl;
+            std::cerr << "DS values: " << DS_val << std::endl;
+            std::cerr << "DDS values: " << DDS_val << std::endl;
+            std::cerr << "DDDS values: " << DDDS_val << std::endl;
+        
+            return {};
+        }
+        cout << "finish calc" << endl;
+        const auto& s_values = solution_->value(S);
+        const auto& ds_values = solution_->value(DS);
+        const auto& dds_values = solution_->value(DDS);
+        vector<CartesianState> best_path;
+        if (N_ >= 61) {
+            for (int i = 0; i < 61; ++i) {
+                CartesianState state;
+                double s = static_cast<double>(s_values(0, i));
+                double ds = static_cast<double>(ds_values(0, i));
+                double dds = static_cast<double>(dds_values(0, i));
+                // if(mode_ % 2 == 1) {
+                //     cout << "ds0: " << ds << endl;
+                //     cout << "dds0: " << dds << endl;
+                // }
+                FrenetState new_sl_state(s + init_sl_state_.s, 0.0, ds, dds, 0.0, 0.0);
+                CartesianState new_state;
+                getRefFromFrenet(new_sl_state, new_state);
+                // cout << new_state.x << ", " << new_state.y << endl;
+                if(mode_ % 2 == 1) {
+                    new_state.speed = -new_state.speed;
+                    new_state.acc = -new_state.acc;
+                }
+                best_path.emplace_back(new_state);
+            }
+            cout << best_path[0].x << ", " << best_path[0].y << ", " << best_path[0].theta << ", " <<  best_path[0].speed << ", "<<  best_path[0].acc << ", " << best_path[0].kappa << endl;
+            cout << best_path[1].x << ", " << best_path[1].y << ", " << best_path[1].theta << ", "<< best_path[1].speed << ", " <<  best_path[0].acc << ", "<< best_path[1].kappa << endl;
+            cout << best_path[2].x << ", " << best_path[2].y << ", " << best_path[2].theta << ", "<< best_path[2].speed << ", " <<  best_path[0].acc << ", "<< best_path[2].kappa << endl;
+            cout << best_path[3].x << ", " << best_path[3].y << ", " << best_path[3].theta << ", "<< best_path[3].speed << ", " <<  best_path[0].acc << ", "<< best_path[3].kappa << endl;
+            cout << best_path[4].x << ", " << best_path[4].y << ", " << best_path[4].theta << ", "<< best_path[4].speed << ", " <<  best_path[0].acc << ", "<< best_path[4].kappa << endl;
+            return best_path;
+        }
+        for (int i = 0; i < N_; ++i) {
+            CartesianState state;
+            double s = static_cast<double>(s_values(0, i));
+            double ds = static_cast<double>(ds_values(0, i));
+            double dds = static_cast<double>(dds_values(0, i));
+            FrenetState new_sl_state(s + init_sl_state_.s, 0.0, ds, dds, 0.0, 0.0);
+            CartesianState new_state;
+            getRefFromFrenet(new_sl_state, new_state);
+            // cout << new_state.x << ", " << new_state.y << endl;
+            if(mode_ % 2 == 1) {
+                new_state.speed = -new_state.speed;
+                new_state.acc = -new_state.acc;
+            }
+            best_path.emplace_back(new_state);
+        }
+        for (int i = 0; i < 61 - N_; ++i) {
+            best_path.emplace_back(best_path.back());
+        }
+         cout << best_path[0].x << ", " << best_path[0].y << ", " << best_path[0].theta << ", " <<  best_path[0].speed << ", " << best_path[0].kappa << endl;
+            cout << best_path[1].x << ", " << best_path[1].y << ", " << best_path[1].theta << ", "<< best_path[1].speed << ", " << best_path[1].kappa << endl;
+            cout << best_path[2].x << ", " << best_path[2].y << ", " << best_path[2].theta << ", "<< best_path[2].speed << ", " << best_path[2].kappa << endl;
+            cout << best_path[3].x << ", " << best_path[3].y << ", " << best_path[3].theta << ", "<< best_path[3].speed << ", " << best_path[3].kappa << endl;
+            cout << best_path[4].x << ", " << best_path[4].y << ", " << best_path[4].theta << ", "<< best_path[4].speed << ", " << best_path[4].kappa << endl;
+        return best_path;
+    }
 
     private:
-        ~ParkingTrajGenerator(){};
         std::shared_ptr<plan_manage::PolyTrajOptimizer> df_refline_ = nullptr;
         traj_utils::Trajectory traj_;
         vector<CartesianState> best_path_;
         FrenetState init_sl_state_;
         CartesianState init_state_;
-        int  = 0;
+        int  frame_count= 0;
 
         double a_max = 0.6, a_min = -0.6;
         double v_max_abs = 2;
@@ -47,21 +268,24 @@ class ParkingTrajGenerator {
                     min_ind = i;
                 }
             }
-            // cout << "min_ind: " << min_ind << ", min_dist: " << min_dist  << ", car_state:" << car_state.x << ", " << car_state.y << endl;
+            //  cout << "min_ind: " << min_ind << ", min_dist: " << min_dist  << ", car_state:" << car_state.x << ", " << car_state.y << endl;
     
             if(min_ind > 0 && min_ind < pos_matrix.cols() - 1) {
                 // ROS_WARN("enter inner");
                 double t = traj_.getDurations()[min_ind - 1];
-                Vector2d min_res = traj_.findMinPtInSegment(min_ind - 1, cur_pos, t);
-                if (!(fabs(min_res(1) - t) < 1e-8)) { //最近点不是端点 
-                    ref_state = traj_.getState(min_res(1), min_ind - 1);
-                }
-                else {
-                    // cout << "min_dis0: " <<min_res(0) << endl;
-                    // ROS_WARN("last part");
-                    min_res = traj_.findMinPtInSegment(min_ind, cur_pos, 0.0);
-                    ref_state = traj_.getState(min_res(1), min_ind);
-                }
+                Vector2d min_res = traj_.findMinPtInSegment(min_ind - 1, cur_pos, t / 2);
+
+                int ind = 0;
+                // cout << min_res(1) << " min_dis0: 0" <<min_res(0) << endl;
+
+                t = traj_.getDurations()[min_ind];
+                Vector2d min_res2 = traj_.findMinPtInSegment(min_ind, cur_pos, t/2);
+                // cout << min_res2(1) <<  " min_dis0: " <<min_res2(0) << endl;
+
+                min_res = min_res(0) < min_res2(0) ? min_res : min_res2;
+                ind = min_res(0) < min_res2(0) ? min_ind-1 : min_ind;
+                ref_state = traj_.getState(min_res(1), ind);
+                // }
                 // cout << "min_dis: " <<min_res(0) << endl;
             } 
             else if (min_ind == 0) {
@@ -123,7 +347,7 @@ class ParkingTrajGenerator {
             double t = traj_.findTInSegment(piece_ind, relative_s);
             ref_state = traj_.getState(t, piece_ind);
         
-            best_path_ref_.emplace_back(ref_state);
+            // best_path_ref_.emplace_back(ref_state);
             car_state.x = ref_state.x - fre_state.l * sin(ref_state.theta);
             car_state.y = ref_state.y + fre_state.l * cos(ref_state.theta);
             car_state.theta = ref_state.theta + atan2(fre_state.dl / (1 - ref_state.kappa * fre_state.l), 1);
@@ -149,76 +373,36 @@ class ParkingTrajGenerator {
             // std::cout << "FrenetToCar时间: " << elapsed_seconds.count() << " 秒" << std::endl;
         }
 
-        vector<CartesianState>  solvePieceJerkProblem() {
-            double path_length = traj_.Pieces_allS.back() - init_sl_state_.s;
-            double total_t = max(1.3 *(v_max_abs * v_max_abs + path_length * a_max) / (a_max * v_max_abs) , 3.0);
-            double start_t = 0.0, end_t = 0.0;
-            int num_of_knots = (int)(10 * total_t);
-            vector<pair<double, double>> s_bounds(num_of_knots);
-            for(int i = 0; i < s_bounds.size(); ++i) {
-                for(auto& traj : MovingObs::obs_traj) {
-                    CartesianState obs_cartesian;
-                    int relative_index = (int)(i * dt_ * 10); //简化，实际应该调用插值函数
-                    if(3 * frame_count < traj.trajs.size()) {
-                        auto& cur_obs = traj.trajs[3 * frame_count];
-                        obs_cartesian = CartesianState(cur_obs.points[relative_index].x + 1.35 * cos(cur_obs.points[relative_index].theta), cur_obs.points[relative_index].y + 1.35* sin(cur_obs.points[relative_index].theta), cur_obs.points[relative_index].theta, cur_obs.points[relative_index].v, 0, 0);
-                        // obs_cartesian = CartesianState(cur_obs.points[relative_index].x, cur_obs.points[relative_index].y, cur_obs.points[relative_index].theta, cur_obs.points[relative_index].v, 0, 0);
-                        
-                    }
-                    else {
-                        auto& cur_obs =  traj.trajs.back();
-                        obs_cartesian = CartesianState(cur_obs.points[relative_index].x + 1.35 * cos(cur_obs.points[relative_index].theta), cur_obs.points[relative_index].y + 1.35* sin(cur_obs.points[relative_index].theta), cur_obs.points[relative_index].theta, cur_obs.points[relative_index].v, 0, 0);
-                    }
-                    FrenetState obs_sl_state;
-                    CarToFrenet(obs_cartesian, obs_sl_state);
-                    if(obs_sl_state.s - 2 <= traj_.Pieces_allS.back() && abs(obs_sl_state.l) < 1.3) { //障碍物与轨迹交叉
-                        s_bounds[i] = std::pair(0, max(0, obs_sl_state.s - init_sl_state_.s - 2));
-                        if(start_t == 0) start_t = dt_ * i;
-                        else end_t = dt_ * i;
-                    }
-                    else {
-                        s_bounds[i] = std::pair(0, max(0, path_length));
-                    }
+        void getRefFromFrenet(const FrenetState& fre_state, CartesianState& car_state) {
+            auto start_time = std::chrono::high_resolution_clock::now();
+            // ROS_WARN("enter FrenetToCar");
+            //这里将refline上的参考点也保存下来用于构造后续优化的目标函数，直接对best_path_ref进行插值，之后如果在别的地方调用这个函数会出问题
+            GlobalPathPoint ref_state{0, 0, 0, 0, 0, 0};
+            double s = 0.0, relative_s = 0.0;
+            int piece_ind = -1;
+            for(int i = 0; i < traj_.Pieces_S.size(); ++i) {
+                if(s +traj_.Pieces_S[i] >= fre_state.s) {
+                    piece_ind = i;
+                    relative_s = fre_state.s - s;
+                    break;
                 }
+                s += traj_.Pieces_S[i];
             }
-            if(start_t > 0) {
-                total_t += (max((end_t - start_t), 0.1) + 1);
-                int n_tmp = num_of_knots;
-                num_of_knots = (int)(10 * total_t);
-                for(int i = 0; i < num_of_knots - n_tmp; ++i) {
-                    s_bounds[i].emplace_back(std::pair(0, max(0, path_length)));
-                }
+            if(piece_ind == -1) {
+                // ROS_ERROR("Find S failed, need_S: %f, all_S: %f", fre_state.s, traj_.Pieces_allS.back());
+                // return;
+                // ROS_WARN("Find S failed, need_S: %f, all_S: %f", fre_state.s, traj_.Pieces_allS.back());
+                piece_ind = traj_.Pieces_S.size() - 1;
+                relative_s = traj_.Pieces_S.back();
             }
-            PiecewiseJerkSpeedProblem piecewise_jerk_problem(num_of_knots, dt_,  std::array<double, 3>{0, init_sl_state_.ds, init_sl_state_.dds});
-            piecewise_jerk_problem.set_weight_x(0.0);
-            piecewise_jerk_problem.set_weight_dx(0.0);
-            piecewise_jerk_problem.set_weight_ddx(1);
-            piecewise_jerk_problem.set_weight_dddx(10);
-            piecewise_jerk_problem.set_scale_factor({1.0, 1.1, 10.0});
-            piecewise_jerk_problem.set_x_bounds(std::move(s_bounds));
-            piecewise_jerk_problem.set_dx_bounds(0, v_max_abs);
-            piecewise_jerk_problem.set_ddx_bounds(a_min, a_max);
-            piecewise_jerk_problem.set_dddx_bound(j_min, j_max);
-            piecewise_jerk_problem.Optimize();
-            // Extract output
-            const std::vector<double>& s = piecewise_jerk_problem.opt_x();
-            const std::vector<double>& ds = piecewise_jerk_problem.opt_dx();
-            const std::vector<double>& dds = piecewise_jerk_problem.opt_ddx();
-            // for(int )
-            // std::vector<double> dx_ref_weight(num_of_knots, 10);
-            // piecewise_jerk_problem.set_dx_ref(dx_ref_weight, dx_ref);
-            // piecewise_jerk_problem.set_x_ref(config_.ref_s_weight(), std::move(x_ref));
-            // piecewise_jerk_problem.set_penalty_dx(penalty_dx);
-            // piecewise_jerk_problem.set_dx_bounds(std::move(s_dot_bounds));
-
-            piecewise_jerk_problem.Optimize(4000);
-            vector<CartesianState> best_path;
-            for(int i = 0; /*i <= 6.0 && */i < 0.1 * ds.size(); i += 0.1) {
-                int ind = (int) (i * 10);
-                FrenetState new_sl_state(s[ind] + init_sl_state_.s, 0.0, ds[ind], dds[ind], 0.0, 0.0);
-                Cartesianstate new_state;
-                FrenetToCar(new_sl_state, new_state);
-                best_path.emplace_back(new_state);
-            }
+            double t = traj_.findTInSegment(piece_ind, relative_s);
+            ref_state = traj_.getState(t, piece_ind);
+            car_state.x = ref_state.x;
+            car_state.y = ref_state.y;
+            car_state.speed = fre_state.ds;
+            car_state.acc =  fre_state.dds;
+            car_state.kappa = ref_state.kappa;
         }
+        int mode_  = 0;
+       
 };

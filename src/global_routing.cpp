@@ -126,7 +126,7 @@ void GlobalRouting::publish_car_start_pose(const geometry_msgs::Pose &start_pose
   // get vehicle start pose
   state.x = start_pose.position.x;
   state.y = start_pose.position.y;
-  state.z = -M_PI/2; //-M_PI/2;//-0.837; //-2.291536; //-M_PI / 2.0;   0.850056
+  state.z = -0.653461;//0; //-M_PI/2;//-0.837; //-2.291536; //-M_PI / 2.0;   0.850056
   // 发布车的起点位置
   vehicle_start_pose_pub_.publish(state);
 }
@@ -172,8 +172,9 @@ GlobalRouting::GlobalRouting()
     goal_distanse = 0.1;
     goal_pose_.position.x = 58.6425 ; 
     goal_pose_.position.y = 28.3;
-    start_pose_.position.x = 14.37;//30.2; //14.37;//35;//14.58 ;   //14.38 70.9
-    start_pose_.position.y = 70.9;//9.9; //70.9;//64.93;//69.0;
+    start_pose_.position.x = 54.655824;//50.2;//30.2; //14.37;//35;//14.58 ;   //14.38 70.9
+    start_pose_.position.y = 9.775734;//9.9;//9.9; //70.9;//64.93;//69.0;
+    /////54.655824, 9.775734, -0.653461
     obs = Obstacles();
 
      // 回调
@@ -204,11 +205,12 @@ GlobalRouting::GlobalRouting()
       obstacle_MarkerArray.markers.emplace_back(marker);
       //obs_pub.publish(obstacle_MarkerArray);
     }
-    MovingObs::num = 3;
-		MovingObs::obs_traj.resize(3);
+    MovingObs::num = 4;
+		MovingObs::obs_traj.resize(4);
     MovingObs::obs_traj[0] = MovingObs::loadTrajectoryData("/home/lynnn/test_ws/opposite1.csv");
     MovingObs::obs_traj[1] = MovingObs::loadTrajectoryData("/home/lynnn/test_ws/following1.csv");
     MovingObs::obs_traj[2] = MovingObs::loadTrajectoryData("/home/lynnn/test_ws/parking1.csv");
+    MovingObs::obs_traj[3] = MovingObs::loadTrajectoryData("/home/lynnn/test_ws/pedestrian.csv");
 
         // obs_traj[1] = loadTrajectoryData("following.csv");
     
@@ -286,11 +288,11 @@ void GlobalRouting::thread_routing()
           visualization_msgs::Marker marker;
           if(frame_count < traj.trajs.size()) {
             auto& cur_obs = traj.trajs[frame_count];
-            Turn_moving_obstacles_into_squares(marker, cur_obs, ind);
+            Turn_moving_obstacles_into_squares(marker, cur_obs, ind, traj.type);
           }
           else {
             auto& cur_obs =  traj.trajs.back();
-           Turn_moving_obstacles_into_squares(marker, cur_obs, ind);
+           Turn_moving_obstacles_into_squares(marker, cur_obs, ind, traj.type);
           }
           obstacle_MarkerArray.markers.emplace_back(marker);
           ind++;

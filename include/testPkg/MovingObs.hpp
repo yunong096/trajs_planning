@@ -83,12 +83,14 @@ public:
     // 加载 CSV 数据
     static obs_trajs loadTrajectoryData(const std::string& filename) {
         obs_trajs result;
-        if(filename.substr(0,21) == "/home/lynnn/test_ws/p")
+        if(filename.substr(0,22) == "/home/lynnn/test_ws/pa")
         result.type = "PARKING";
         else if(filename.substr(0,21) == "/home/lynnn/test_ws/o")
         result.type = "OPPOSITE";
         else if(filename.substr(0,21) == "/home/lynnn/test_ws/f")
         result.type = "FOLLOWING";
+        else if(filename.substr(0,22) == "/home/lynnn/test_ws/pe")
+        result.type = "PEDESTRAIN";
         
         std::vector<Trajectory> data;
         std::ifstream file(filename);
@@ -155,7 +157,7 @@ public:
             data.push_back(traj);
         }
         // if (filename == "/home/lynnn/test_ws/parking.csv" || filename == "/home/lynnn/test_ws/parking1.csv") {
-        if(filename.substr(0,21) == "/home/lynnn/test_ws/p") {
+        if(filename.substr(0,22) == "/home/lynnn/test_ws/pa") {
             cout << "parking set" << endl;
             data.back().cur_state.theta =  data[data.size() - 2].cur_state.theta;
         }

@@ -16,7 +16,7 @@
 
 #include "modules/planning/planning_base/math/piecewise_jerk/piecewise_jerk_speed_problem.h"
 
-#include "cyber/common/log.h"
+// #include "cyber/common/log.h"
 #include "modules/planning/planning_base/gflags/planning_gflags.h"
 
 namespace apollo {
@@ -129,7 +129,7 @@ void PiecewiseJerkSpeedProblem::CalculateKernel(std::vector<c_float>* P_data,
 }
 
 void PiecewiseJerkSpeedProblem::CalculateOffset(std::vector<c_float>* q) {
-  CHECK_NOTNULL(q);
+  // CHECK_NOTNULL(q);
   const int n = static_cast<int>(num_of_knots_);
   const int kNumParam = 3 * n;
   q->resize(kNumParam);
