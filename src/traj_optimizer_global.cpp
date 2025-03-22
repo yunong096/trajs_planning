@@ -1740,9 +1740,9 @@ double PolyTrajOptimizer::debugGradCheck(const int i_dp, // index of constraint 
   void PolyTrajOptimizer::setParam() {
     traj_resolution_ = 16;
     destraj_resolution_ = 32;
-    wei_obs_ = 2000.0;
-    wei_surround_ = 5000.0;
-    wei_feas_ = 1000.0; //2500
+    wei_obs_ = 500.0; //2000
+    wei_surround_ = 5000.0; //没有用到
+    wei_feas_ = 0.0; //2500 
     wei_cur_ = 10000;
     wei_d_cur_ = 1000;
     wei_speed_ = 0.0;

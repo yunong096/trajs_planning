@@ -152,7 +152,7 @@ bool TrajPlanner::RunGlobalOpt(const vector<Vector2d>& raw_pt) {
   duration_container.resize(index_corner.size() - 1);
 
   for(int i = 0;i < index_corner.size() - 1; ++i) { //去掉终点
-    double timePerPiece = 1.0;
+    double timePerPiece = 0.5;
     traj_utils::FlatTrajData trajs;
     trajs.singul =  i % 2 == 0 ? 1 : -1;
     singul_container.push_back(trajs.singul);

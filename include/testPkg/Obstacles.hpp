@@ -18,7 +18,8 @@ public:
 		num = 11;
 		obstacle obs1(Vector2d{0, 0}, vector<double>{138.5, 28.5, 28.5, 138.5}, vector<double>{68.3, 68.3, 73.5, 73.5});
 		obstacle obs2(Vector2d{0, 0}, vector<double>{76.7, 7.7, 7.7, 76.7}, vector<double>{0.8, 0.8, 6.3, 6.3});
-		obstacle obs3(Vector2d{0, 0}, vector<double>{76.7, 7.7, 7.7, 76.7}, vector<double>{13.4, 13.4, 24.5, 24.5});
+		// obstacle obs3(Vector2d{0, 0}, vector<double>{76.7, 7.7, 7.7, 76.7}, vector<double>{13.4, 13.4, 24.5, 24.5});
+		obstacle obs3(Vector2d{0, 0}, vector<double>{54.436667, 51.836667, 51.836667, 54.436667}, vector<double>{13.4, 13.4, 19.1, 19.1});
 		obstacle obs4(Vector2d{0, 0}, vector<double>{76.7, 7.7, 7.7, 76.7}, vector<double>{31.7, 31.7, 43.1, 43.1});
 		obstacle obs5(Vector2d{0, 0}, vector<double>{76.7, 7.7, 7.7, 76.7}, vector<double>{50.2, 50.2, 61.3, 61.3});
 		obstacle obs6(Vector2d{0, 0}, vector<double>{138.5, 83.8, 83.8, 138.5}, vector<double>{0.8, 0.8, 6.3, 6.3});
