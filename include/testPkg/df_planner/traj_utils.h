@@ -263,7 +263,8 @@ class Piece {
     Eigen::Vector2d ddsigma = getddSigma(relative_t);
     Eigen::Vector2d dddsigma = getdddSigma(relative_t);
 
-    const double dsigma_norm = dsigma.norm();
+    // const double dsigma_norm = dsigma.norm();
+    const double dsigma_norm = hypot(dsigma(0), dsigma(1));
     refline.theta.emplace_back(std::atan2(singul * dsigma(1), singul * dsigma(0)));
     // refline.speed.emplace_back(singul * dsigma.norm());
     if (dsigma_norm < plan_manage::kEpsilon) {

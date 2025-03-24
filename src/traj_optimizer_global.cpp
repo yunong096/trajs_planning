@@ -735,20 +735,20 @@ namespace plan_manage {
       const double gradViolaKt =
           curv_dir * alpha * vel3_2_reci_e *
           (dddsigma.transpose() * B_h * dsigma - 3 * vel2_reci_e * z_h3 * z_h1);
-      //     jerkOpt_container[trajid].get_gdC().block<6, 2>(i * 6, 0) +=
-      //     step * wei_cur_ * 10.0 * violaCurvPenaD * gradViolaKc;
-      //     jerkOpt_container[trajid].get_gdT() +=
-      //     wei_cur_ * 10.0 *
-      //     (violaCurvPenaD * gradViolaKt * step + violaCurvPena / K);
-      // costs(2) += omg * step * wei_cur_ * 10.0 * violaCurvPena;
-      // curcost+=omg * step * wei_cur_ * 10.0 * violaCurvPena;
-      jerkOpt_container[trajid].get_gdC().block<6, 2>(i * 6, 0) +=
-      step * 0 * 10.0 * violaCurvPenaD * gradViolaKc;
-      jerkOpt_container[trajid].get_gdT() +=
-      0 * 10.0 *
-      (violaCurvPenaD * gradViolaKt * step + violaCurvPena / K);
-  costs(2) += omg * step * 0 * 10.0 * violaCurvPena;
-  curcost+=omg * step * 0 * 10.0 * violaCurvPena;
+          jerkOpt_container[trajid].get_gdC().block<6, 2>(i * 6, 0) +=
+          step * wei_cur_ * 10.0 * violaCurvPenaD * gradViolaKc;
+          jerkOpt_container[trajid].get_gdT() +=
+          wei_cur_ * 10.0 *
+          (violaCurvPenaD * gradViolaKt * step + violaCurvPena / K);
+      costs(2) += omg * step * wei_cur_ * 10.0 * violaCurvPena;
+      curcost+=omg * step * wei_cur_ * 10.0 * violaCurvPena;
+  //     jerkOpt_container[trajid].get_gdC().block<6, 2>(i * 6, 0) +=
+  //     step * 0 * 10.0 * violaCurvPenaD * gradViolaKc;
+  //     jerkOpt_container[trajid].get_gdT() +=
+  //     0 * 10.0 *
+  //     (violaCurvPenaD * gradViolaKt * step + violaCurvPena / K);
+  // costs(2) += omg * step * 0 * 10.0 * violaCurvPena;
+  // curcost+=omg * step * 0 * 10.0 * violaCurvPena;
 
 
       const double d_curv = std::fabs(cur) - max_cur; //惩罚大于最大曲率的点
@@ -767,7 +767,6 @@ namespace plan_manage {
 
 
       //考虑约束加入曲率变化率
-      // const double d_dcurv = std::fabs(d_kappa) - max_forward_cur; //惩罚大于最大曲率的点
       const double dcurv_dir = d_kappa > 0.0 ? 1.0 : -1.0;  //希望曲率变化尽可能小
         double violaDKappaPena = 0.0;
         double violaDKappaPenaD = 0.0;
@@ -781,10 +780,10 @@ namespace plan_manage {
           dddsigma.transpose() * 3 * vel6_2_reci_e * (B_h * dsigma * z_h1 + z2 * dsigma) + 0.0 +
           ddsigma.transpose() * ((B_h.transpose() * dddsigma * vel4_2_reci_e + vel6_2_reci_e * ( -4 * z1 *dsigma + 3*B_h.transpose()*ddsigma*z_h1 + 3 * z2 * ddsigma) - 18 * vel8_2_reci_e * z2 * z_h1 * dsigma) ));
         jerkOpt_container[trajid].get_gdC().block<6, 2>(i * 6, 0) +=
-            step * wei_d_cur_ * 10.0 * violaDKappaPenaD * gradViolaDKc * 20.0;
+            step * wei_d_cur_ * 10.0 * violaDKappaPenaD * gradViolaDKc ;
             jerkOpt_container[trajid].get_gdT() +=
             wei_d_cur_ * 10.0 *
-            (violaDKappaPenaD * gradViolaDKt * step + violaDKappaPena / K) * 20.0;
+            (violaDKappaPenaD * gradViolaDKt * step + violaDKappaPena / K) ;
         costs(2) += omg * step * wei_d_cur_ * 10.0 * violaDKappaPena;
         curcost+=omg * step * wei_d_cur_ * 10.0 * violaDKappaPena;
 
@@ -1740,9 +1739,9 @@ double PolyTrajOptimizer::debugGradCheck(const int i_dp, // index of constraint 
   void PolyTrajOptimizer::setParam() {
     traj_resolution_ = 16;
     destraj_resolution_ = 32;
-    wei_obs_ = 500.0; //2000
+    wei_obs_ = 2000.0; //2000
     wei_surround_ = 5000.0; //没有用到
-    wei_feas_ = 0.0; //2500 
+    wei_feas_ = 2500; //2500 
     wei_cur_ = 10000;
     wei_d_cur_ = 1000;
     wei_speed_ = 0.0;

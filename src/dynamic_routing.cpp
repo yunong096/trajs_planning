@@ -153,7 +153,7 @@ void Dynamic_routing::thread_routing(void)
       config_.resolution = 0.1;
 
       // 打开输入文件流
-      std::ifstream inFile("/home/lynnn/test_ws/globalpoints_data5.txt"); //5
+      std::ifstream inFile("/home/lynnn/test_ws/globalpoints_data5_2.txt"); //5
       if(!IS_USING_DF_GLOBAL_PLANNER) 
         inFile =  std::ifstream("/home/lynnn/test_ws/globalpoints_data6.txt");
   
@@ -219,7 +219,7 @@ void Dynamic_routing::thread_routing(void)
       else {
         //df优化
         TrajPlanner df_global_opt;
-        int res = df_global_opt.RunGlobalOpt(raw_points_);
+        int res = df_global_opt.RunGlobalOpt2(raw_points_);
         // PolyTrajOptimizer::Ptr Dynamic_routing::df_opt_ = nullptr;
         df_global_opt.getPolyTrajOpt(df_opt_);
         df_opt_->GetResult(0.1, refline);

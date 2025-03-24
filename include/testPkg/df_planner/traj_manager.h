@@ -176,7 +176,7 @@ class TrajPlanner {
         hPolys_.clear();
         double resolution = 0.1; //x1 y0.2   原来为1
         double step = resolution * 1.0;
-        double limitBound = 30.0;
+        double limitBound = 20.0;
         //generate a rectangle for this state px py yaw
         for(const auto state : statelist){
             //generate a hPoly
