@@ -1742,8 +1742,8 @@ double PolyTrajOptimizer::debugGradCheck(const int i_dp, // index of constraint 
     wei_obs_ = 2000.0; //2000
     wei_surround_ = 5000.0; //没有用到
     wei_feas_ = 2500; //2500 
-    wei_cur_ = 10000;
-    wei_d_cur_ = 1000;
+    wei_cur_ = 20000; //10000
+    wei_d_cur_ = 1000; //1000
     wei_speed_ = 0.0;
     wei_sqrvar_ = 500.0;
     wei_time_ = 0.0; //500.0;
@@ -1759,9 +1759,9 @@ double PolyTrajOptimizer::debugGradCheck(const int i_dp, // index of constraint 
     max_backward_acc = 0.6;
     max_latacc_ = 4.0;
     GearOpt = true;
-    memsize = 256;
+    memsize = 128;
     past = 3;
-    delta = 1e-3;
+    delta = 1e-6;
     mini_T = 0.1;
 
 

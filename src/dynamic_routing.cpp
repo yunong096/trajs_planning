@@ -153,7 +153,7 @@ void Dynamic_routing::thread_routing(void)
       config_.resolution = 0.1;
 
       // 打开输入文件流
-      std::ifstream inFile("/home/lynnn/test_ws/globalpoints_data5_2.txt"); //5
+      std::ifstream inFile("/home/lynnn/test_ws/globalpoints_data5_3.txt"); //5
       if(!IS_USING_DF_GLOBAL_PLANNER) 
         inFile =  std::ifstream("/home/lynnn/test_ws/globalpoints_data6.txt");
   

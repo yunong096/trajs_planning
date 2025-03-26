@@ -101,7 +101,7 @@ def read_coordinates_from_file(file_path):
         for line in lines:
             x, y = line.strip().split()
             x_coords.append(float(x))
-            y_coords.append(float(y))
+            y_coords.append(float(y) + 0.09)
     return x_coords, y_coords
 
 def write_coordinates_to_file(file_path, x_coords, y_coords):

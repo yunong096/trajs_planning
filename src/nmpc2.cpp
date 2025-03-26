@@ -57,7 +57,7 @@ Mpc::Mpc(int count, const Vector3d& goal_pose, int gear) {
     v_ref = -1.5;
     // delta_max_ = 0.52;
     delta_max_ = 0.61;
-    vector<double> weights = {4,4,2,0,2,0.5,10,10}; //Q,R,S
+    vector<double> weights = {4,4,4,0,2,0.5,100,100}; //Q,R,S
     acc_min_ = - acc_max_;
     delta_min_ = - delta_max_;
     goal_pose_ = goal_pose;
@@ -469,9 +469,11 @@ bool Mpc::solve(CartesianState& current_state,
 }
 
 bool Mpc::solve(CartesianState& current_state,std::vector<CartesianState>& ref_states_,Obstacles& obs) {
+// N_ = ref_states_.size() - 1;
+// ref_states = ref_states_;
         //设置ref_states_para
-int max_iter = 2;
-ref_states = ref_states_;
+int max_iter = 1;
+ref_states.assign(ref_states_.begin(), ref_states_.begin() + 61);
 
 while(max_iter--) {
 Opti opti = Opti();
@@ -529,7 +531,8 @@ X_ref(3, 0) = current_state.theta;
 for (int i = 1; i < N_ + 1; ++i) {
 X_ref(0, i) = ref_states_[i].x;
 X_ref(1, i) = ref_states_[i].y;
-X_ref(2, i) = v_ref;
+// X_ref(2, i) = v_ref;
+X_ref(2, i) = ref_states_[i].speed;
 X_ref(3, i) = ref_states_[i].theta;
 }
 // cout << "set ref state success" << endl;
@@ -597,14 +600,14 @@ X_end(1) = goal_pose_(1);
 X_end(2) = ref_states.back().speed;
 X_end(3) = goal_pose_(2);
 initX(all, N_) = X_end;
-opti.subject_to(X(0, N_) ==  goal_pose_(0));
-opti.subject_to(X(1, N_) ==  goal_pose_(1));
-opti.subject_to(X(3, N_) ==  goal_pose_(2));
-if( fabs(ref_states.back().speed) < 0.1){
-cout << "enter final heading planning with speed, back speed is: " <<  ref_states.back().speed << endl;
-initX(2, N_) = 0.0;
-opti.subject_to(X(2, N_) ==  0.0);
-} 
+// opti.subject_to(X(0, N_) ==  goal_pose_(0));
+// opti.subject_to(X(1, N_) ==  goal_pose_(1));
+// opti.subject_to(X(3, N_) ==  goal_pose_(2));
+// if( fabs(ref_states.back().speed) < 0.1){
+// cout << "enter final heading planning with speed, back speed is: " <<  ref_states.back().speed << endl;
+// initX(2, N_) = 0.0;
+// opti.subject_to(X(2, N_) ==  0.0);
+// } 
 }
 else {
 ROS_WARN("not enter final heading planning, ref(%f, %f, %f), local(%f, %f, %f, %f)", goal_pose_(0), goal_pose_(1), goal_pose_(2), ref_states.back().x, ref_states.back().y, ref_states.back().theta, ref_states.back().speed);
@@ -654,7 +657,7 @@ poly(0, 3) = x - 0.5 * cos_theta - 0.5 * sin_theta;
 poly(1, 3) = y - 0.5 * sin_theta + 0.5 * cos_theta;
 }
 
-double margin =sqrt(0.2); //安全距离
+double margin =1.4; //安全距离
 //后轴约束
 VectorXd alpha;
 double beta, d;
@@ -725,9 +728,9 @@ cout << "set obstacles constrains success" << endl;
 
 
 // 设置初始值
-// opti.set_initial(X, initX);
-// opti.set_initial(U, initU);
-// opti.set_initial(S, initS);
+opti.set_initial(X, initX);
+opti.set_initial(U, initU);
+opti.set_initial(S, initS);
 
 //set solver
 casadi::Dict solver_opts; // 设置求解器选项

@@ -8,6 +8,7 @@ class ParkingTrajGenerator {
     public:
         ParkingTrajGenerator(int mode, const CartesianState& init_state,  std::shared_ptr<plan_manage::PolyTrajOptimizer> df_refline, const traj_utils::Trajectory traj,int count, const vector<CartesianState>& last_path){
             frame_count = count;
+            last_path_ = last_path;
             mode_ = mode;
             df_refline_ = df_refline;
             traj_ = traj;
@@ -22,7 +23,7 @@ class ParkingTrajGenerator {
             ROS_WARN("current_frenet_state:  s--%f,  l--%f,  ds--%f,  dds--%f", init_sl_state_.s, init_sl_state_.l, init_sl_state_.ds, init_sl_state_.dds);
             // Initialize();
         };
-        
+        vector<CartesianState> last_path_;
         ~ParkingTrajGenerator(){};
 
         vector<CartesianState>  solvePieceJerkProblem() {
@@ -51,10 +52,10 @@ class ParkingTrajGenerator {
                     FrenetState obs_sl_state;
                     CarToFrenet(obs_cartesian, obs_sl_state);
                     // ROS_WARN("obs_frenet_state:  s--%f,  l--%f,  ds--%f,  dds--%f", obs_sl_state.s, obs_sl_state.l, obs_sl_state.ds, obs_sl_state.dds);
-                    if(obs_sl_state.s - 1.8 <= traj_.Pieces_allS.back() && fabs(obs_sl_state.l) < 1.8) {// &&  obs_sl_state.s - init_sl_state_.s > 2.2) { //障碍物与轨迹交叉
+                    if(obs_sl_state.s - 1.8 <= traj_.Pieces_allS.back() && fabs(obs_sl_state.l) < 1.8  &&  obs_sl_state.s - init_sl_state_.s > 1.8) { //障碍物与轨迹交叉
                         s_bounds[i] = std::pair<double, double>(0.0, max(0.0, obs_sl_state.s - init_sl_state_.s - 1.8)); //1 + 0.5 + 0.3
-                        // cout  << "检测到障碍轨迹与路径相交 : " <<  obs_sl_state.s - init_sl_state_.s - 1.8 << endl;
-                        if(start_t == 0) start_t = dt_ * i;
+                        cout  << "检测到障碍轨迹与路径相交 : " <<  obs_sl_state.s - init_sl_state_.s - 1.8 << endl;
+                        if(start_t == -1) start_t = dt_ * i;
                         end_t = dt_ * i;
                     }
                     else {
@@ -64,8 +65,9 @@ class ParkingTrajGenerator {
             }
             // cout << "完成初步s上下限设置和总时间设置" << endl;
             if(start_t >= 0) {
-                cout << "更新总时间" << endl;
-                total_t += 1.5 * (max((end_t - start_t), 0.1));
+                // total_t += 1.5 * (max((end_t - start_t), 0.1));
+                total_t += 1.5 * (max((end_t - start_t)+0.1, 0.1));
+                cout << "更新总时间: add " << end_t - start_t << endl;
                 int n_tmp = num_of_knots;
                 num_of_knots = (int)(10 * total_t + 1);
                 for(int i = n_tmp; i < num_of_knots; ++i) {
@@ -134,7 +136,7 @@ class ParkingTrajGenerator {
             opti.subject_to(s_bounds[i].first <= S(0,i) <= s_bounds[i].second);
             // opti.subject_to(0<= S(0,i) <= path_length);
             opti.subject_to(0 <= DS(0,i) <= 2);
-            opti.subject_to(-1 <= DDS(0,i) <= 1);
+            opti.subject_to(- 1<= DDS(0,i) <= 1);
         }
     
         //set solver
@@ -161,6 +163,7 @@ class ParkingTrajGenerator {
             // piecewise_jerk_problem.Optimize(4000);
             // 缓存 solution_->value(X) 和 solution_->value(U) 的结果
         std::unique_ptr<casadi::OptiSol>  solution_; // = std::make_unique<casadi::OptiSol>(opti.solve());
+        vector<CartesianState> best_path;
         try {
             solution_ = std::make_unique<casadi::OptiSol>(opti.solve());
         } catch (const casadi::CasadiException& e) {
@@ -176,16 +179,21 @@ class ParkingTrajGenerator {
             std::cerr << "DS values: " << DS_val << std::endl;
             std::cerr << "DDS values: " << DDS_val << std::endl;
             std::cerr << "DDDS values: " << DDDS_val << std::endl;
-        
-            return {};
+            best_path.assign(last_path_.begin() +3, last_path_.end());
+            for (int i = best_path.size(); i < 61; ++i) {
+                best_path.emplace_back(best_path.back());
+            }
+            return best_path;
         }
         cout << "finish calc" << endl;
         const auto& s_values = solution_->value(S);
         const auto& ds_values = solution_->value(DS);
         const auto& dds_values = solution_->value(DDS);
-        vector<CartesianState> best_path;
+        
         if (N_ >= 61) {
-            for (int i = 0; i < 61; ++i) {
+            // int idx = 0;
+            // for (int i = 0; i < N_; ++i) {
+            for (int i = 0; i < N_; ++i) {
                 CartesianState state;
                 double s = static_cast<double>(s_values(0, i));
                 double ds = static_cast<double>(ds_values(0, i));
@@ -399,6 +407,7 @@ class ParkingTrajGenerator {
             ref_state = traj_.getState(t, piece_ind);
             car_state.x = ref_state.x;
             car_state.y = ref_state.y;
+            car_state.theta = ref_state.theta;
             car_state.speed = fre_state.ds;
             car_state.acc =  fre_state.dds;
             car_state.kappa = ref_state.kappa;
